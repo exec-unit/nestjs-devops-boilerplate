@@ -22,15 +22,10 @@
 .env.infra
 microservices.local
 
-.cache/
-__pycache__/
-*.pyc
 
-# Generated local development compose
-compose/docker-compose.local.yml
 
 # Service-specific environment files
-services/**/.env
+apps/**/.env
 
 # Generated service env files on servers
 .env.*
@@ -38,20 +33,34 @@ services/**/.env
 !.env.infra.example
 
 ##################################################################
-# IDE / Editor
+# NestJS / Node.js
 ##################################################################
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build Outputs
+dist/
+*.tsbuildinfo
+.swc/
+
+# Testing
+coverage/
+
+# Database & Migrations
+.drizzle/
 
 ##################################################################
 # Logs
 ##################################################################
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
 
 ##################################################################
 # Temporary files
@@ -59,9 +68,26 @@ logs/
 tmp/
 temp/
 *.tmp
+.cache/
+__pycache__/
+*.pyc
 
 ##################################################################
-Spring Boot / Maven
+# OS / IDE / Editor
 ##################################################################
-**/target
-**/build
+.vscode/
+.idea/
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+*.swn
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

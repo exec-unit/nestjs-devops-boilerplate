@@ -1,0 +1,76 @@
+{
+  "name": "@nestjs-devops-boilerplate/core",
+  "version": "1.0.0",
+  "packageManager": "pnpm@11.9.0",
+  "description": "Production-ready NestJS monorepo boilerplate with 4-tier Ansible IaC, GitHub Actions CI/CD, Docker, SWC, and security scanning.",
+  "type": "module",
+  "author": "exec-unit",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/exec-unit/nestjs-devops-boilerplate.git"
+  },
+  "imports": {
+    "#libs/*": "./dist/libs/*",
+    "#apps/*": "./dist/apps/*"
+  },
+  "keywords": [
+    "nestjs",
+    "devops",
+    "boilerplate",
+    "docker",
+    "ansible",
+    "ci-cd",
+    "monorepo",
+    "microservices",
+    "typescript"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:build": "tsc --noEmit -p tsconfig.build.json",
+    "build": "swc apps libs -d dist",
+    "dev:build": "swc apps libs -d dist -w",
+    "start:dev": "pnpm -r --parallel run start:dev",
+    "format": "prettier --write \"{apps,libs,test}/**/*.ts\"",
+    "format:check": "prettier --check \"{apps,libs,test}/**/*.ts\"",
+    "lint:fix": "eslint \"{apps,libs,test}/**/*.ts\" --fix",
+    "lint": "eslint \"{apps,libs,test}/**/*.ts\"",
+    "test": "pnpm -r test",
+    "test:cov": "pnpm -r test:cov",
+    "test:e2e": "pnpm -r test:e2e"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.18.0",
+    "@swc/cli": "^0.8.1",
+    "@swc/core": "^1.15.47",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "concurrently": "^10.0.4",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.2",
+    "globals": "^17.0.0",
+    "husky": "^9.1.7",
+    "jest": "^30.0.0",
+    "lint-staged": "^17.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.9.0",
+      "onFail": "download"
+    }
+  }
+}
