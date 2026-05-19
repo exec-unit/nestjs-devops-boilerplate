@@ -32,13 +32,11 @@ jobs:
     uses: ./.github/workflows/_build-images.yml
     with:
       environment: "production"
-      services: ${{ needs.prepare-release.outputs.services }}
+      apps: ${{ needs.prepare-release.outputs.apps }}
       version: ${{ needs.prepare-release.outputs.version }}
       max_parallel: 1
     secrets:
-      YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
-      YC_REGISTRY_USERNAME: ${{ secrets.YC_REGISTRY_USERNAME }}
-      YC_REGISTRY_PASSWORD: ${{ secrets.YC_REGISTRY_PASSWORD }}
+      GHCR_PAT: ${{ secrets.GHCR_PAT }}
 
   deploy:
     needs: [prepare-release, build-images]
@@ -51,5 +49,5 @@ jobs:
       ANSIBLE_SSH_KEY: ${{ secrets.ANSIBLE_SSH_KEY }}
       ANSIBLE_INVENTORY_HOSTS: ${{ secrets.ANSIBLE_INVENTORY_HOSTS }}
       ANSIBLE_INVENTORY_ALL: ${{ secrets.ANSIBLE_INVENTORY_ALL }}
-      YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+      GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
       SECRETS_JSON: ${{ toJSON(secrets) }}

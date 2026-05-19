@@ -1,11 +1,11 @@
 # =============================================================================
 # Reusable Workflow: Prepare Release
-# Purpose: Detect changed services and generate release metadata
+# Purpose: Detect changed apps and generate release metadata
 # Called by: deploy-staging.yml, release-production.yml
 # Outputs:
 #   - version: Deployment version (commit SHA for staging, Git tag for production)
-#   - services: JSON array of changed services
-#   - release_map: JSON mapping of service -> version for Ansible
+#   - apps: JSON array of changed apps
+#   - release_map: JSON mapping of app -> version for Ansible
 #   - compose_changed: Boolean indicating if compose files changed
 # =============================================================================
 name: Prepare Release
@@ -26,11 +26,11 @@ on:
         description: "Release version"
         value: ${{ jobs.prepare.outputs.version }}
       release_map:
-        description: "JSON map of services to versions"
+        description: "JSON map of apps to versions"
         value: ${{ jobs.prepare.outputs.release_map }}
-      services:
-        description: "List of changed services"
-        value: ${{ jobs.prepare.outputs.services }}
+      apps:
+        description: "List of changed apps"
+        value: ${{ jobs.prepare.outputs.apps }}
       compose_changed:
         description: "Whether compose files changed"
         value: ${{ jobs.prepare.outputs.compose_changed }}
@@ -42,10 +42,10 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       release_map: ${{ steps.release-map.outputs.map }}
-      services: ${{ steps.services-list.outputs.services }}
+      apps: ${{ steps.apps-list.outputs.apps }}
       compose_changed: ${{ steps.check-compose.outputs.changed }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
@@ -112,37 +112,37 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
-      # Detect changed services
-      - name: Detect changed services
+      # Detect changed apps
+      - name: Detect changed apps
         id: detect
         uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68
         with:
-          files: services/**
+          files: apps/**
           dir_names: true
           dir_names_max_depth: 2
           base_sha: ${{ steps.base.outputs.base }}
 
-      - name: Build services list
-        id: services-list
+      - name: Build apps list
+        id: apps-list
         run: |
           if [ -n "${{ steps.detect.outputs.all_changed_files }}" ]; then
-            # Extract service names: remove 'services/' prefix and filter out 'services' itself
-            SERVICES=$(echo "${{ steps.detect.outputs.all_changed_files }}" | tr ' ' '\n' | \
-              sed 's|^services/||' | grep -v '^services$' | sort -u | \
+            # Extract app names: remove 'apps/' prefix and filter out 'apps' itself
+            APPS=$(echo "${{ steps.detect.outputs.all_changed_files }}" | tr ' ' '\n' | \
+              sed 's|^apps/||' | grep -v '^apps$' | sort -u | \
               jq -R -s -c 'split("\n") | map(select(length > 0))')
           else
-            SERVICES="[]"
+            APPS="[]"
           fi
-          echo "services=$SERVICES" >> $GITHUB_OUTPUT
-          echo "Changed services: $SERVICES"
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          echo "Changed apps: $APPS"
 
       # Create Release Map
       - name: Generate release map
         id: release-map
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          SERVICES='${{ steps.services-list.outputs.services }}'
-          RELEASE_MAP=$(echo "$SERVICES" | jq -c --arg ver "$VERSION" 'map({(.): $ver}) | add // {}')
+          APPS='${{ steps.apps-list.outputs.apps }}'
+          RELEASE_MAP=$(echo "$APPS" | jq -c --arg ver "$VERSION" 'map({(.): $ver}) | add // {}')
 
           echo "Release Map (compact): $RELEASE_MAP"
           echo "map=$RELEASE_MAP" >> $GITHUB_OUTPUT
