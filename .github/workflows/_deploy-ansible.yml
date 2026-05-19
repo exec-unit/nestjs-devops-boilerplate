@@ -1,6 +1,6 @@
 # =============================================================================
 # Reusable Workflow: Deploy via Ansible
-# Purpose: Execute Ansible playbook to deploy services to target environment
+# Purpose: Execute Ansible playbook to deploy apps to target environment
 # Called by: deploy-staging.yml, release-production.yml
 # Key features:
 #   - Dynamic vault.yml generation from GitHub Secrets (secure, no shell injection)
@@ -19,7 +19,7 @@ on:
       release_map:
         required: true
         type: string
-        description: "JSON map of services to versions"
+        description: "JSON map of apps to versions"
     secrets:
       ANSIBLE_SSH_KEY:
         required: true
@@ -27,7 +27,7 @@ on:
         required: true
       ANSIBLE_INVENTORY_ALL:
         required: true
-      YC_REGISTRY_ID:
+      GITHUB_REPOSITORY_OWNER:
         required: true
       SECRETS_JSON:
         required: true
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Setup SSH for Ansible
         uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd
@@ -47,7 +47,7 @@ jobs:
           ssh-private-key: ${{ secrets.ANSIBLE_SSH_KEY }}
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.13"
           cache: "pip"
@@ -97,4 +97,4 @@ jobs:
           ansible-playbook -i inventories/${{ inputs.environment }}/hosts.yml \
             playbooks/release.yml \
             --extra-vars "release_map='$RELEASE_MAP'" \
-            --extra-vars "registry_id=${{ secrets.YC_REGISTRY_ID }}"
+            --extra-vars "registry_id=${{ secrets.GITHUB_REPOSITORY_OWNER }}"
