@@ -17,7 +17,7 @@ else
 endif
 
 # Project configuration
-COMPOSE_PROJECT_NAME := openmeal-backend
+COMPOSE_PROJECT_NAME := boilerplate-backend
 
 # Configuration files
 ENV_FILE := .env.infra

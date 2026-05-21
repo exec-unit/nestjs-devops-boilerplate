@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SSL Certificate Auto-Renewal Script for OpenMeal
+# SSL Certificate Auto-Renewal Script for NestJS Boilerplate
 # This script handles automatic SSL certificate renewal using certbot
 # Supports both systemd timers and cron jobs
 # Cross-platform compatible: Linux, macOS, Windows (WSL only)
@@ -50,7 +50,7 @@ check_os_compatibility() {
 }
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCRIPT_NAME="openmeal-ssl-renew"
+SCRIPT_NAME="boilerplate-ssl-renew"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -94,12 +94,12 @@ renew_certificates() {
 
     # Run certbot renewal
     log "Running certbot renew..."
-    make ssl-cert-renew >> /var/log/openmeal-ssl-renew.log 2>&1
+    make ssl-cert-renew >> /var/log/boilerplate-ssl-renew.log 2>&1
 
     if [ $? -eq 0 ]; then
         log "Certificate renewal completed successfully"
     else
-        error "Certificate renewal failed. Check /var/log/openmeal-ssl-renew.log for details"
+        error "Certificate renewal failed. Check /var/log/boilerplate-ssl-renew.log for details"
         exit 1
     fi
 }
@@ -127,7 +127,7 @@ install_systemd() {
     # Create systemd service file
     cat > /tmp/${SCRIPT_NAME}.service <<EOF
 [Unit]
-Description=OpenMeal SSL Certificate Renewal
+Description=NestJS Boilerplate SSL Certificate Renewal
 After=network.target docker.service
 Requires=docker.service
 
@@ -146,7 +146,7 @@ EOF
     # Create systemd timer file (runs twice daily at 3:00 AM and 3:00 PM)
     cat > /tmp/${SCRIPT_NAME}.timer <<EOF
 [Unit]
-Description=OpenMeal SSL Certificate Renewal Timer
+Description=NestJS Boilerplate SSL Certificate Renewal Timer
 Requires=${SCRIPT_NAME}.service
 
 [Timer]
@@ -200,7 +200,7 @@ install_cron() {
     log "Installing cron job for SSL renewal..."
 
     # Create cron job (runs twice daily at 3:00 AM and 3:00 PM)
-    CRON_CMD="${PROJECT_DIR}/scripts/ssl-renew-cron.sh renew >> /var/log/openmeal-ssl-renew.log 2>&1"
+    CRON_CMD="${PROJECT_DIR}/scripts/ssl-renew-cron.sh renew >> /var/log/boilerplate-ssl-renew.log 2>&1"
 
     # Check if cron job already exists
     if crontab -l 2>/dev/null | grep -q "ssl-renew-cron.sh"; then
@@ -209,13 +209,13 @@ install_cron() {
     fi
 
     # Add new cron jobs
-    (crontab -l 2>/dev/null; echo "# OpenMeal SSL Certificate Renewal - runs twice daily") | crontab -
+    (crontab -l 2>/dev/null; echo "# NestJS Boilerplate SSL Certificate Renewal - runs twice daily") | crontab -
     (crontab -l 2>/dev/null; echo "0 3 * * * $CRON_CMD") | crontab -
     (crontab -l 2>/dev/null; echo "0 15 * * * $CRON_CMD") | crontab -
 
     log "Cron job installed successfully"
     log "Certificates will be checked twice daily at 3:00 AM and 3:00 PM"
-    log "View logs at: /var/log/openmeal-ssl-renew.log"
+    log "View logs at: /var/log/boilerplate-ssl-renew.log"
 }
 
 # Uninstall systemd timer
@@ -245,7 +245,7 @@ uninstall_cron() {
 
     log "Uninstalling cron job..."
 
-    crontab -l 2>/dev/null | grep -v "ssl-renew-cron.sh" | grep -v "OpenMeal SSL Certificate Renewal" | crontab -
+    crontab -l 2>/dev/null | grep -v "ssl-renew-cron.sh" | grep -v "NestJS Boilerplate SSL Certificate Renewal" | crontab -
 
     log "Cron job uninstalled"
 }

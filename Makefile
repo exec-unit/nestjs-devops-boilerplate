@@ -1,5 +1,5 @@
 # ============================================================================
-# OpenMeal Backend - Multi-Environment Docker Compose Management
+# NestJS Boilerplate Backend - Multi-Environment Docker Compose Management
 # ============================================================================
 # Supported platforms: Linux, macOS, Windows (Git Bash/WSL)
 # Architecture: Four-tier deployment strategy
@@ -25,7 +25,7 @@ include makefiles/local-dev.mk
 ## help: Show this help message
 help:
 	@echo "$(CYAN)╔════════════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║         OpenMeal Backend - Control Panel                       ║$(RESET)"
+	@echo "$(CYAN)║         NestJS Boilerplate Backend - Control Panel                       ║$(RESET)"
 	@echo "$(CYAN)╚════════════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(GREEN)Core Commands (reads ENVIRONMENT variable from .env.infra):$(RESET)"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ============================================================================
-# OpenMeal Backend - Service Health Check Script
+# NestJS Boilerplate Backend - Service Health Check Script
 # ============================================================================
 # Automatically detects and checks health of all running Docker containers
 # Cross-platform compatible: Linux, macOS, Windows (Git Bash/WSL)
@@ -51,7 +51,7 @@ COMPOSE_FILES="-f docker-compose.yml -f compose/infra.yml -f compose/monitoring.
 COMPOSE_CMD="docker compose $COMPOSE_FILES"
 
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║           OpenMeal - Service Health Assessment                ║${NC}"
+echo -e "${CYAN}║           NestJS Boilerplate - Service Health Assessment       ║${NC}"
 echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

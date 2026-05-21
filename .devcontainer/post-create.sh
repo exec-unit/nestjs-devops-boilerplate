@@ -1,12 +1,12 @@
 #!/bin/bash
-# DevContainer post-creation setup for OpenMeal development environment
+# DevContainer post-creation setup for NestJS Boilerplate development environment
 set -e
 
 # Get workspace folder (usually /workspace)
 WORKSPACE_FOLDER="${WORKSPACE_FOLDER:-/workspace}"
 
 echo "========================================="
-echo "OpenMeal DevContainer Post-Create Setup"
+echo "NestJS Boilerplate DevContainer Post-Create Setup"
 echo "========================================="
 
 # Fix permissions for devuser home directory and mounted volumes
@@ -144,7 +144,7 @@ echo "  - make up, make down, make restart, make build"
 echo "  - make test (run Ansible tests)"
 echo "  - ansible --version"
 echo "  - molecule --version"
-echo "  - java -version"
-echo "  - mvn -version"
+echo "  - node -v"
+echo "  - pnpm -v"
 echo "  - docker --version"
 echo ""

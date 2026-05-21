@@ -20,10 +20,10 @@ ssl-cert-init:
 		exit 1; \
 	fi
 	@docker run --rm --name certbot-temp \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_etc:/etc/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_var:/var/lib/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_webroot:/var/www/certbot \
-		--network $${DOCKER_NETWORK_NAME:-openmeal_net} \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_etc:/etc/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_var:/var/lib/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_webroot:/var/www/certbot \
+		--network $${DOCKER_NETWORK_NAME:-boilerplate_net} \
 		certbot/certbot:v2.10.0 certonly \
 		--webroot \
 		--webroot-path=/var/www/certbot \
@@ -35,10 +35,10 @@ ssl-cert-init:
 		$$(if [ "$${SSL_STAGING}" = "True" ]; then echo "--staging"; fi) \
 		-d $${API_DOMAIN_NAME} 2>&1 | grep -E "(Successfully received|Saving debug log|error|Error|failed|Failed)" || true
 	@docker run --rm --name certbot-temp \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_etc:/etc/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_var:/var/lib/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_webroot:/var/www/certbot \
-		--network $${DOCKER_NETWORK_NAME:-openmeal_net} \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_etc:/etc/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_var:/var/lib/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_webroot:/var/www/certbot \
+		--network $${DOCKER_NETWORK_NAME:-boilerplate_net} \
 		certbot/certbot:v2.10.0 certonly \
 		--webroot \
 		--webroot-path=/var/www/certbot \
@@ -51,10 +51,10 @@ ssl-cert-init:
 		-d $${KEYCLOAK_DOMAIN_NAME} 2>&1 | grep -E "(Successfully received|Saving debug log|error|Error|failed|Failed)" || true
 	@if [ -n "$${GRAFANA_DOMAIN_NAME}" ] && [ "$${GRAFANA_DOMAIN_NAME}" != "localhost" ] && [ "$${GRAFANA_DOMAIN_NAME}" != "" ]; then \
 		docker run --rm --name certbot-temp \
-			-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_etc:/etc/letsencrypt \
-			-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_var:/var/lib/letsencrypt \
-			-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_webroot:/var/www/certbot \
-			--network $${DOCKER_NETWORK_NAME:-openmeal_net} \
+			-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_etc:/etc/letsencrypt \
+			-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_var:/var/lib/letsencrypt \
+			-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_webroot:/var/www/certbot \
+			--network $${DOCKER_NETWORK_NAME:-boilerplate_net} \
 			certbot/certbot:v2.10.0 certonly \
 			--webroot \
 			--webroot-path=/var/www/certbot \
@@ -74,19 +74,19 @@ ssl-cert-init:
 		echo "$(RED)✗ Error: .env.infra file not found$(RESET)"; \
 		exit 1; \
 	fi
-	@docker restart $${CONTAINER_PREFIX:-openmeal}-nginx > /dev/null 2>&1
+	@docker restart $${CONTAINER_PREFIX:-boilerplate}-nginx > /dev/null 2>&1
 	@echo "$(GREEN)✓ SSL setup complete$(RESET)"
 
 ## ssl-cert-renew: Manually renew SSL certificates
 ssl-cert-renew:
 	@echo "$(GREEN)→ Renewing SSL certificates...$(RESET)"
 	@docker run --rm --name certbot-renew \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_etc:/etc/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_var:/var/lib/letsencrypt \
-		-v $${COMPOSE_PROJECT_NAME:-openmeal-backend}_certbot_webroot:/var/www/certbot \
-		--network $${DOCKER_NETWORK_NAME:-openmeal_net} \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_etc:/etc/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_var:/var/lib/letsencrypt \
+		-v $${COMPOSE_PROJECT_NAME:-boilerplate-backend}_certbot_webroot:/var/www/certbot \
+		--network $${DOCKER_NETWORK_NAME:-boilerplate_net} \
 		certbot/certbot:v2.10.0 renew --quiet
-	@docker exec $${CONTAINER_PREFIX:-openmeal}-nginx nginx -s reload
+	@docker exec $${CONTAINER_PREFIX:-boilerplate}-nginx nginx -s reload
 	@echo "$(GREEN)✓ Certificates renewed and Nginx reloaded$(RESET)"
 
 ## ssl-setup-cron: Setup automatic SSL certificate renewal
