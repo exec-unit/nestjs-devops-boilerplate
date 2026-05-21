@@ -14,7 +14,7 @@
 ## up: Start environment (reads ENVIRONMENT from .env.infra)
 ## Usage: make up [SERVICES="service1 service2"]
 up: check-env prepare-db-configs
-	@ENV=$$(grep "^ENVIRONMENT=" $(ENV_FILE) | cut -d'=' -f2); \
+	@ENV=$$(grep "^ENVIRONMENT=" $(ENV_FILE) | cut -d'=' -f2 | tr -d '\r'); \
 	if [ -n "$(SERVICES)" ]; then \
 		echo "$(GREEN)→ Starting specific services: $(SERVICES)$(RESET)"; \
 		$(COMPOSE_BASE_CMD) $(COMPOSE_BASE) $(COMPOSE_INFRA) $(COMPOSE_MONITORING) up -d $(SERVICES); \
@@ -25,10 +25,7 @@ up: check-env prepare-db-configs
 				echo "$(GREEN)→ Starting LOCAL DEV environment...$(RESET)"; \
 				echo "$(CYAN)→ Infrastructure: postgres, mongodb, redis, minio$(RESET)"; \
 				echo "$(CYAN)→ External deps: shared-dev keycloak & redpanda$(RESET)"; \
-				echo "$(CYAN)→ Microservices: from $(MICROSERVICES_LOCAL)$(RESET)"; \
-				$(MAKE) check-microservices-config; \
 				$(COMPOSE_BASE_CMD) $(COMPOSE_BASE) $(COMPOSE_INFRA) --profile local-dev up -d; \
-				$(MAKE) _start-selected-microservices; \
 				echo "$(GREEN)✓ LOCAL DEV environment started$(RESET)"; \
 				echo "$(YELLOW)→ Configure external connections to shared-dev VDS$(RESET)"; \
 				;; \
@@ -115,7 +112,7 @@ restart:
 ## restart-db: Restart database containers to apply new user configurations
 restart-db: check-env
 	@echo "$(YELLOW)→ Restarting database containers...$(RESET)"
-	@docker restart $${CONTAINER_PREFIX:-openmeal}-postgres $${CONTAINER_PREFIX:-openmeal}-mongodb 2>/dev/null || true
+	@docker restart $${CONTAINER_PREFIX:-boilerplate}-postgres $${CONTAINER_PREFIX:-boilerplate}-mongodb 2>/dev/null || true
 	@echo "$(GREEN)✓ Database containers restarted$(RESET)"
 	@echo "$(CYAN)→ New users from init-users.conf will be created on restart$(RESET)"
 
@@ -130,7 +127,7 @@ ps:
 ## status: Detailed status of all services
 status:
 	@echo "$(CYAN)╔════════════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║              OpenMeal Services Status                          ║$(RESET)"
+	@echo "$(CYAN)║              NestJS Boilerplate Services Status                          ║$(RESET)"
 	@echo "$(CYAN)╚════════════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@$(COMPOSE_BASE_CMD) $(COMPOSE_BASE) $(COMPOSE_INFRA) $(COMPOSE_MONITORING) ps -a
@@ -199,11 +196,7 @@ _start-selected-microservices:
 	@echo "$(CYAN)→ Starting selected microservices...$(RESET)"
 	@ENV=$$(grep "^ENVIRONMENT=" $(ENV_FILE) | cut -d'=' -f2); \
 	if [ "$$ENV" = "local-dev" ]; then \
-		if [ ! -f compose/docker-compose.local.yml ]; then \
-			echo "$(YELLOW)→ Generating local compose file...$(RESET)"; \
-			$(MAKE) generate-local-compose; \
-		fi; \
-		COMPOSE_FILE="compose/docker-compose.local.yml"; \
+		COMPOSE_FILE="docker-compose.yml"; \
 		BUILD_FLAG="--build"; \
 	else \
 		COMPOSE_FILE="docker-compose.yml"; \
