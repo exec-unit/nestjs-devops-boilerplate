@@ -1,5 +1,5 @@
 # ============================================================================
-# OpenMeal Backend - Core Application Microservices
+# NestJS Boilerplate - Core Application Microservices
 # ============================================================================
 # This file contains definitions for all custom microservices.
 # Infrastructure services (postgres, redis, nginx, etc.) are located in:
@@ -16,35 +16,26 @@
 # Shared network for all services
 networks:
   default:
-    name: ${DOCKER_NETWORK_NAME:-openmeal_net}
+    name: ${DOCKER_NETWORK_NAME:-boilerplate_net}
     external: true
 
-# Volumes for microservices will be added as services are developed
-# volumes:
-#   service_data:
-
-# ============================================================================
-# IMPORTANT: Uncomment and configure services as you develop them!
-# ============================================================================
-# services:
-#   api-gateway:
-#     image: cr.yandex/${REGISTRY_ID}/api-gateway:${API_GATEWAY_VERSION:-latest}
-#     env_file:
-#       - .env.api-gateway
-#     container_name: ${CONTAINER_PREFIX}-api-gateway
-#     restart: unless-stopped
-#     ports:
-#       - "${SERVER_PORT:-8080}:8080"
-#     networks:
-#       - default
-
-#   user-service:
-#     image: cr.yandex/${REGISTRY_ID}/user-service:${USER_SERVICE_VERSION:-latest}
-#     env_file:
-#       - .env.user-service
-#     container_name: ${CONTAINER_PREFIX}-user-service
-#     restart: unless-stopped
-#     ports:
-#       - "${SERVER_PORT:-8081}:8081"
-#     networks:
-#       - default
+services:
+  user-service:
+    image: ${REGISTRY_URL:-ghcr.io/your-github-username}/user-service:${USER_SERVICE_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: user-service
+    container_name: ${CONTAINER_PREFIX}-user-service
+    env_file:
+      - apps/user-service/.env
+    restart: unless-stopped
+    networks:
+      - default
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8081/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
