@@ -1,5 +1,5 @@
 # ============================================================================
-# OpenMeal Nginx - Full HTTPS Configuration
+# NestJS Boilerplate Nginx - Full HTTPS Configuration
 # ============================================================================
 # This template is used after SSL certificates are obtained.
 # For initial certificate acquisition, use default-http-only.conf.template

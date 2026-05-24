@@ -1,5 +1,5 @@
 # ============================================================================
-# OpenMeal Monitoring Stack
+# NestJS Boilerplate Monitoring Stack
 # ============================================================================
 # Prometheus and Grafana for metrics collection and visualization.
 # Activated via 'monitoring' profile (prod environment only).
@@ -11,34 +11,34 @@ volumes:
 
 networks:
   default:
-    name: ${DOCKER_NETWORK_NAME:-openmeal_net}
+    name: ${DOCKER_NETWORK_NAME:-boilerplate_net}
     external: true
 
 services:
   # Prometheus - Metrics collection and time-series database
   prometheus:
-    container_name: ${CONTAINER_PREFIX:-openmeal}-prometheus
+    container_name: ${CONTAINER_PREFIX:-boilerplate}-prometheus
     image: prom/prometheus:v3.7.3
-    profiles: ["monitoring"]
+    profiles: ['monitoring']
     restart: always
     networks:
       - default
     ports:
-      - "127.0.0.1:9090:9090"
+      - '127.0.0.1:9090:9090'
     volumes:
       - ./config/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=7d"
-      - "--storage.tsdb.wal-compression"
-      - "--web.enable-lifecycle"
-      - "--web.page-title=OpenMeal Prometheus"
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.wal-compression'
+      - '--web.enable-lifecycle'
+      - '--web.page-title=NestJS Boilerplate Prometheus'
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1",
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1',
         ]
       interval: 15s
       timeout: 5s
@@ -47,33 +47,29 @@ services:
 
   # Grafana - Metrics visualization and dashboards
   grafana:
-    container_name: ${CONTAINER_PREFIX:-openmeal}-grafana
+    container_name: ${CONTAINER_PREFIX:-boilerplate}-grafana
     image: grafana/grafana-oss:11.5.8
-    profiles: ["monitoring"]
+    profiles: ['monitoring']
     restart: always
     networks:
       - default
     ports:
-      - "127.0.0.1:3000:3000"
+      - '127.0.0.1:3000:3000'
     volumes:
       - grafana_data:/var/lib/grafana
       - ./config/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_RENDERING_SERVER_URL: "none"
-      GF_LOG_LEVEL: "warn"
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_RENDERING_SERVER_URL: 'none'
+      GF_LOG_LEVEL: 'warn'
     depends_on:
       prometheus:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget -q --spider http://localhost:3000/api/health || exit 1",
-        ]
+      test: ['CMD-SHELL', 'wget -q --spider http://localhost:3000/api/health || exit 1']
       interval: 15s
       timeout: 5s
       retries: 3

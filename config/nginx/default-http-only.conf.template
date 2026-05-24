@@ -1,5 +1,5 @@
 # ============================================================================
-# OpenMeal Nginx - HTTP-Only Configuration
+# NestJS Boilerplate Nginx - HTTP-Only Configuration
 # ============================================================================
 # Used ONLY during initial SSL certificate acquisition.
 # After certificates are obtained, Ansible switches to default.conf.template
