@@ -4,13 +4,13 @@ global:
 
 scrape_configs:
   # Prometheus self-monitoring
-  - job_name: "prometheus"
+  - job_name: 'prometheus'
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets: ['localhost:9090']
 
-  # Future: Add Spring Boot microservices with actuator endpoints
-  # - job_name: 'openmeal-microservices'
+  # Future: Add NestJS microservices with @willsoto/nestjs-prometheus endpoints
+  # - job_name: 'boilerplate-microservices'
   #   static_configs:
-  #     - targets: ['openmeal-api-gateway:8080', 'openmeal-user-service:8080']
+  #     - targets: ['boilerplate-api-gateway:8080', 'boilerplate-user-service:8080']
   #   metrics_path: '/actuator/prometheus'
   #   scrape_interval: 30s

@@ -4,9 +4,9 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://openmeal-prometheus:9090
+    url: http://boilerplate-prometheus:9090
     isDefault: true
     editable: false
     jsonData:
-      timeInterval: "30s"
-      httpMethod: "POST"
+      timeInterval: '30s'
+      httpMethod: 'POST'
