@@ -1,0 +1,11 @@
+---
+# ============================================================================
+# Ansible Lint Configuration
+# ============================================================================
+# This configuration file customizes the behavior of ansible-lint for this project.
+
+warn_list:
+  - args[module]
+
+skip_list:
+  - var-naming[no-role-prefix]
