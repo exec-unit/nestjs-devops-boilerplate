@@ -9,11 +9,11 @@
 
 - name: Copy .env.infra.example from project root
   ansible.builtin.copy:
-    src: "{{ project_root }}/.env.infra.example"
-    dest: "{{ app_home }}/.env.infra"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: "0600"
+    src: '{{ project_root }}/.env.infra.example'
+    dest: '{{ app_home }}/.env.infra'
+    owner: '{{ app_user }}'
+    group: '{{ app_group }}'
+    mode: '0600'
   when: skip_copy_example is not defined or not skip_copy_example
 
 - name: Get all vault variables
@@ -33,19 +33,19 @@
 
 - name: Replace infrastructure secrets in .env.infra from vault
   ansible.builtin.replace:
-    path: "{{ app_home }}/.env.infra"
+    path: '{{ app_home }}/.env.infra'
     regexp: "^{{ item.key | upper | regex_replace('^VAULT_', '') }}=.*"
     replace: "{{ item.key | upper | regex_replace('^VAULT_', '') }}={{ item.value }}"
-  loop: "{{ vault_infra_vars }}"
+  loop: '{{ vault_infra_vars }}'
   loop_control:
-    label: "{{ item.key }}"
+    label: '{{ item.key }}'
   when:
     - vault_infra_vars | length > 0
   no_log: true
 
 - name: Override deployment-specific variables in .env.infra
   ansible.builtin.include_tasks: override-env-var.yml
-  loop: "{{ env_var_mapping | dict2items }}"
+  loop: '{{ env_var_mapping | dict2items }}'
   loop_control:
     loop_var: var_mapping
 
@@ -55,29 +55,29 @@
 
 - name: Verify .env.infra file was created
   ansible.builtin.stat:
-    path: "{{ app_home }}/.env.infra"
+    path: '{{ app_home }}/.env.infra'
   register: env_file_stat
 
 - name: Fail if .env.infra was not created
   ansible.builtin.fail:
-    msg: "Failed to generate .env.infra file"
+    msg: 'Failed to generate .env.infra file'
   when:
     - not env_file_stat.stat.exists
 
 - name: Create init-users.conf from .example if not exists
   ansible.builtin.copy:
-    src: "{{ app_home }}/config/{{ item }}/init-users.conf.example"
-    dest: "{{ app_home }}/config/{{ item }}/init-users.conf"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: "0644"
+    src: '{{ app_home }}/config/{{ item }}/init-users.conf.example'
+    dest: '{{ app_home }}/config/{{ item }}/init-users.conf'
+    owner: '{{ app_user }}'
+    group: '{{ app_group }}'
+    mode: '0644'
     remote_src: true
     force: false
   loop:
     - postgres
     - mongodb
   become: true
-  become_user: "{{ app_user }}"
+  become_user: '{{ app_user }}'
 
 - name: Run database config preparation script
   ansible.builtin.shell: |
@@ -86,32 +86,32 @@
     set +a
     ENVIRONMENT="{{ deployment_type }}" bash scripts/prepare-db-configs.sh
   args:
-    chdir: "{{ app_home }}"
+    chdir: '{{ app_home }}'
     executable: /bin/bash
   become: true
-  become_user: "{{ app_user }}"
+  become_user: '{{ app_user }}'
   register: db_config_result
   changed_when: true
   notify: Restart database containers
 
 - name: Display database config preparation result
   ansible.builtin.debug:
-    msg: "{{ db_config_result.stdout_lines }}"
+    msg: '{{ db_config_result.stdout_lines }}'
 
 - name: Set nginx config template if override provided
   ansible.builtin.lineinfile:
-    path: "{{ app_home }}/.env.infra"
-    regexp: "^NGINX_CONFIG_TEMPLATE="
-    line: "NGINX_CONFIG_TEMPLATE={{ nginx_template_override }}"
+    path: '{{ app_home }}/.env.infra'
+    regexp: '^NGINX_CONFIG_TEMPLATE='
+    line: 'NGINX_CONFIG_TEMPLATE={{ nginx_template_override }}'
     state: present
   when: nginx_template_override is defined
 
 - name: Display config generation summary
   ansible.builtin.debug:
     msg:
-      - "✓ Configuration files generated"
-      - "Infrastructure config: {{ app_home }}/.env.infra"
-      - "Service configs: {{ service_env_files.files | length if service_env_files is defined else 0 }} files (.env.*)"
-      - "Deployment type: {{ deployment_type }}"
-      - "Database configs prepared for: {{ deployment_type }}"
+      - '✓ Configuration files generated'
+      - 'Infrastructure config: {{ app_home }}/.env.infra'
+      - 'Service configs: {{ service_env_files.files | length if service_env_files is defined else 0 }} files (.env.*)'
+      - 'Deployment type: {{ deployment_type }}'
+      - 'Database configs prepared for: {{ deployment_type }}'
       - "{{ 'Nginx template: ' + nginx_template_override if nginx_template_override is defined else '' }}"
