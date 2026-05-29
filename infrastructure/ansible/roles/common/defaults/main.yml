@@ -6,13 +6,13 @@
 # ============================================================================
 
 # System configuration
-common_timezone: "Etc/UTC"
-common_locale: "en_US.UTF-8"
+common_timezone: 'Etc/UTC'
+common_locale: 'en_US.UTF-8'
 
 # Application user
-common_app_user: "openmeal"
-common_app_group: "openmeal"
-common_app_home: "/opt/openmeal"
+common_app_user: 'boilerplate'
+common_app_group: 'boilerplate'
+common_app_home: '/opt/boilerplate'
 
 # Swap configuration
 common_swap_size_mb: 2048

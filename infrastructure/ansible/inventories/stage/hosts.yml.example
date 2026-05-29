@@ -1,6 +1,6 @@
 ---
 # ============================================================================
-# OpenMeal Stage Environment - Ansible Inventory
+# NestJS Boilerplate Stage Environment - Ansible Inventory
 # ============================================================================
 # Copy this file to hosts.yml and configure for your stage server
 #
@@ -12,7 +12,7 @@
 
 all:
   children:
-    openmeal_stage:
+    boilerplate_stage:
       hosts:
         stage-server:
           ansible_host: 192.168.1.100

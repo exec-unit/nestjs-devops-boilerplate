@@ -3,7 +3,7 @@
 # Docker Role - Default Variables
 # ============================================================================
 
-docker_edition: "ce"
+docker_edition: 'ce'
 docker_packages:
   - docker-ce
   - docker-ce-cli
@@ -12,12 +12,12 @@ docker_packages:
   - docker-compose-plugin
 
 docker_users:
-  - "{{ common_app_user | default('openmeal') }}"
+  - "{{ common_app_user | default('boilerplate') }}"
 
 # Docker daemon configuration
 docker_daemon_config:
-  log-driver: "json-file"
+  log-driver: 'json-file'
   log-opts:
-    max-size: "10m"
-    max-file: "3"
-  storage-driver: "overlay2"
+    max-size: '10m'
+    max-file: '3'
+  storage-driver: 'overlay2'
