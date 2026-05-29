@@ -1,6 +1,6 @@
 ---
 # ============================================================================
-# OpenMeal - Application Update Only Playbook
+# NestJS Boilerplate - Application Update Only Playbook
 # ============================================================================
 # Updates application without touching server configuration
 # Uses deploy role with tags: sync, config, services (skips SSL setup)
@@ -10,24 +10,24 @@
 #
 # ============================================================================
 
-- name: Update OpenMeal Application
+- name: Update NestJS Boilerplate Application
   hosts: all
   become: true
 
   vars_files:
-    - "{{ inventory_dir }}/group_vars/all.yml"
-    - "{{ inventory_dir }}/group_vars/vault.yml"
+    - '{{ inventory_dir }}/group_vars/all.yml'
+    - '{{ inventory_dir }}/group_vars/vault.yml'
 
   pre_tasks:
     - name: Display update information
       ansible.builtin.debug:
         msg:
-          - "OpenMeal Application Update"
-          - "Environment: {{ deployment_type }}"
+          - 'NestJS Boilerplate Application Update'
+          - 'Environment: {{ deployment_type }}'
 
     - name: Check if SSL certificates exist
       ansible.builtin.shell:
-        cmd: docker volume inspect openmeal-backend_certbot_etc --format '{{ '{{' }} .Mountpoint {{ '}}' }}'
+        cmd: docker volume inspect boilerplate-backend_certbot_etc --format '{{ '{{' }} .Mountpoint {{ '}}' }}'
       register: certbot_volume_path
       changed_when: false
       failed_when: false
@@ -35,7 +35,7 @@
 
     - name: Check certificate directory
       ansible.builtin.stat:
-        path: "{{ certbot_volume_path.stdout }}/live/{{ api_domain_name }}"
+        path: '{{ certbot_volume_path.stdout }}/live/{{ api_domain_name }}'
       register: ssl_cert_check
       when:
         - deployment_type in ['shared-dev', 'stage', 'prod']
@@ -57,15 +57,15 @@
     - name: Stop running services
       ansible.builtin.command:
         cmd: make down
-        chdir: "{{ app_home }}"
-      become_user: "{{ app_user }}"
+        chdir: '{{ app_home }}'
+      become_user: '{{ app_user }}'
       register: stop_result
       changed_when: true
       failed_when: false
 
     - name: Deploy with sync, config, and services
       ansible.builtin.include_role:
-        name: openmeal-deploy
+        name: nestjs_deploy
         apply:
           tags:
             - sync
@@ -79,18 +79,18 @@
     - name: Display service status
       ansible.builtin.command: make ps
       args:
-        chdir: "{{ app_home }}"
-      become_user: "{{ app_user }}"
+        chdir: '{{ app_home }}'
+      become_user: '{{ app_user }}'
       register: service_status
       changed_when: false
 
     - name: Show running services
       ansible.builtin.debug:
-        msg: "{{ service_status.stdout_lines }}"
+        msg: '{{ service_status.stdout_lines }}'
 
     - name: Display update summary
       ansible.builtin.debug:
         msg:
-          - "Application Updated!"
-          - "Services restarted"
+          - 'Application Updated!'
+          - 'Services restarted'
           - "SSL config: {{ nginx_config_template | default('default') }}"
