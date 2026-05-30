@@ -10,7 +10,7 @@
 
 - name: Check available secret sources
   ansible.builtin.set_fact:
-    has_consolidated_env: "{{ vault_services_env is defined and vault_services_env | length > 0 }}"
+    has_consolidated_env: '{{ vault_services_env is defined and vault_services_env | length > 0 }}'
     has_per_service_env: >-
       {{
         vars | dict2items
@@ -22,10 +22,10 @@
 - name: Display environment strategy
   ansible.builtin.debug:
     msg:
-      - "Secret sources available:"
-      - "  - Consolidated (vault_services_env): {{ has_consolidated_env }}"
-      - "  - Per-service (vault_*_env): {{ has_per_service_env }}"
-      - "Strategy: Hybrid (both sources merged, per-service takes priority)"
+      - 'Secret sources available:'
+      - '  - Consolidated (vault_services_env): {{ has_consolidated_env }}'
+      - '  - Per-service (vault_*_env): {{ has_per_service_env }}'
+      - 'Strategy: Hybrid (both sources merged, per-service takes priority)'
 
 # ============================================================================
 # Discover all services from docker-compose.yml
@@ -34,7 +34,7 @@
   ansible.builtin.shell: |
     grep -q '^services:' docker-compose.yml && echo "exists" || echo "missing"
   args:
-    chdir: "{{ app_home }}"
+    chdir: '{{ app_home }}'
   register: services_section_check
   changed_when: false
 
@@ -47,7 +47,7 @@
       grep -E '^\s+[a-z-]+:$' docker-compose.yml | sed 's/://g' | tr -d ' ' | grep -v '^placeholder$' || true
     fi
   args:
-    chdir: "{{ app_home }}"
+    chdir: '{{ app_home }}'
     executable: /bin/bash
   register: discovered_services
   changed_when: false
@@ -70,9 +70,9 @@
 - name: Skip service env generation (no services defined)
   ansible.builtin.debug:
     msg:
-      - "No services defined in docker-compose.yml"
-      - "Skipping .env.<service> generation"
-      - "Add services to docker-compose.yml to enable per-service environment files"
+      - 'No services defined in docker-compose.yml'
+      - 'Skipping .env.<service> generation'
+      - 'Add services to docker-compose.yml to enable per-service environment files'
   when: services_section_check.stdout != "exists" or (discovered_services.stdout_lines | default([]) | length == 0)
 
 # ============================================================================
@@ -110,11 +110,11 @@
     chmod 600 "$ENV_FILE"
     chown {{ app_user }}:{{ app_group }} "$ENV_FILE"
   args:
-    chdir: "{{ app_home }}"
+    chdir: '{{ app_home }}'
     executable: /bin/bash
-  loop: "{{ discovered_services.stdout_lines | default([]) }}"
+  loop: '{{ discovered_services.stdout_lines | default([]) }}'
   loop_control:
-    label: "{{ item }}"
+    label: '{{ item }}'
   when:
     - services_section_check.stdout == "exists"
     - discovered_services.stdout_lines | default([]) | length > 0
@@ -123,13 +123,13 @@
 
 - name: List generated service env files
   ansible.builtin.find:
-    paths: "{{ app_home }}"
-    patterns: ".env.*"
+    paths: '{{ app_home }}'
+    patterns: '.env.*'
     file_type: file
   register: service_env_files
 
 - name: Display generated service env files
   ansible.builtin.debug:
     msg:
-      - "✓ Generated {{ service_env_files.files | length }} service environment files"
-      - "{% for file in service_env_files.files %}  - {{ file.path | basename }}{% endfor %}"
+      - '✓ Generated {{ service_env_files.files | length }} service environment files'
+      - '{% for file in service_env_files.files %}  - {{ file.path | basename }}{% endfor %}'

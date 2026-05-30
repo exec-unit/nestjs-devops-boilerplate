@@ -1,6 +1,6 @@
 ---
 # ============================================================================
-# OpenMeal - Server Setup Only Playbook
+# NestJS Boilerplate - Server Setup Only Playbook
 # ============================================================================
 # Prepares server without deploying the application
 #
@@ -9,20 +9,20 @@
 #
 # ============================================================================
 
-- name: Setup Server for OpenMeal
+- name: Setup Server for NestJS Boilerplate
   hosts: all
   become: true
 
   vars_files:
-    - "{{ inventory_dir }}/group_vars/all.yml"
+    - '{{ inventory_dir }}/group_vars/all.yml'
 
   pre_tasks:
     - name: Display setup information
       ansible.builtin.debug:
         msg:
-          - "OpenMeal Server Setup"
-          - "Target: {{ inventory_hostname }}"
-          - "IP: {{ ansible_host }}"
+          - 'NestJS Boilerplate Server Setup'
+          - 'Target: {{ inventory_hostname }}'
+          - 'IP: {{ ansible_host }}'
 
   roles:
     - role: common
@@ -33,5 +33,5 @@
     - name: Display setup summary
       ansible.builtin.debug:
         msg:
-          - "Server Setup Completed!"
-          - "Ready for application deployment"
+          - 'Server Setup Completed!'
+          - 'Ready for application deployment'

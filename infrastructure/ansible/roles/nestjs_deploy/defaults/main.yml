@@ -1,27 +1,27 @@
 ---
 # ============================================================================
-# OpenMeal Deploy Role - Default Variables
+# NestJS Boilerplate Deploy Role - Default Variables
 # ============================================================================
 
-app_home: "/opt/openmeal"
-app_user: "openmeal"
-app_group: "openmeal"
+app_home: '/opt/boilerplate'
+app_user: 'boilerplate'
+app_group: 'boilerplate'
 
-deployment_type: "stage"
-container_prefix: "openmeal"
-docker_network_name: "openmeal_net"
+deployment_type: 'stage'
+container_prefix: 'boilerplate'
+docker_network_name: 'boilerplate_net'
 
-api_domain_name: "localhost"
-keycloak_domain_name: "localhost"
-keycloak_hostname: "localhost"
-grafana_domain_name: "localhost"
-ssl_email: ""
-ssl_staging: "false"
+api_domain_name: 'localhost'
+keycloak_domain_name: 'localhost'
+keycloak_hostname: 'localhost'
+grafana_domain_name: 'localhost'
+ssl_email: ''
+ssl_staging: 'false'
 
 # Redpanda external access (only for shared-dev)
-redpanda_external_port: ""
+redpanda_external_port: ''
 
-project_root: "{{ playbook_dir }}/../../.."
+project_root: '{{ playbook_dir }}/../../..'
 
 # Build images flag
 build_images: false
@@ -34,68 +34,68 @@ build_images: false
 
 # Directories to synchronize (with rsync)
 sync_directories:
-  - name: "compose"
-    src: "compose"
-    dest: "compose"
+  - name: 'compose'
+    src: 'compose'
+    dest: 'compose'
     delete: true
     rsync_opts:
-      - "--exclude=.git"
-      - "--exclude=*.swp"
+      - '--exclude=.git'
+      - '--exclude=*.swp'
 
-  - name: "config"
-    src: "config"
-    dest: "config"
+  - name: 'config'
+    src: 'config'
+    dest: 'config'
     delete: true
     rsync_opts:
-      - "--exclude=.git"
-      - "--exclude=*.swp"
+      - '--exclude=.git'
+      - '--exclude=*.swp'
 
-  - name: "scripts"
-    src: "scripts"
-    dest: "scripts"
+  - name: 'scripts'
+    src: 'scripts'
+    dest: 'scripts'
     delete: true
     rsync_opts:
-      - "--exclude=.git"
+      - '--exclude=.git'
 
-  - name: "infrastructure/keycloak"
-    src: "infrastructure/keycloak"
-    dest: "infrastructure/keycloak"
+  - name: 'infrastructure/keycloak'
+    src: 'infrastructure/keycloak'
+    dest: 'infrastructure/keycloak'
     delete: true
 
-  - name: "makefiles"
-    src: "makefiles"
-    dest: "makefiles"
+  - name: 'makefiles'
+    src: 'makefiles'
+    dest: 'makefiles'
     delete: true
     rsync_opts:
-      - "--exclude=.git"
+      - '--exclude=.git'
 
 # Individual files to copy
 sync_files:
-  - name: "docker-compose.yml"
-    src: "docker-compose.yml"
-    dest: "docker-compose.yml"
-    mode: "0644"
+  - name: 'docker-compose.yml'
+    src: 'docker-compose.yml'
+    dest: 'docker-compose.yml'
+    mode: '0644'
 
-  - name: "Makefile"
-    src: "Makefile"
-    dest: "Makefile"
-    mode: "0644"
+  - name: 'Makefile'
+    src: 'Makefile'
+    dest: 'Makefile'
+    mode: '0644'
 
-  - name: ".env.infra.example"
-    src: ".env.infra.example"
-    dest: ".env.infra.example"
-    mode: "0644"
+  - name: '.env.infra.example'
+    src: '.env.infra.example'
+    dest: '.env.infra.example'
+    mode: '0644'
 
 # Directories to create on target
 ensure_directories:
-  - path: "{{ app_home }}"
-    mode: "0755"
-  - path: "{{ app_home }}/backups"
-    mode: "0755"
-  - path: "{{ app_home }}/logs"
-    mode: "0755"
-  - path: "{{ app_home }}/infrastructure"
-    mode: "0755"
+  - path: '{{ app_home }}'
+    mode: '0755'
+  - path: '{{ app_home }}/backups'
+    mode: '0755'
+  - path: '{{ app_home }}/logs'
+    mode: '0755'
+  - path: '{{ app_home }}/infrastructure'
+    mode: '0755'
 
 # ============================================================================
 # Environment Variable Mapping

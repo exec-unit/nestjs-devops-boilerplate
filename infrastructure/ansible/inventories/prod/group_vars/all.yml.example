@@ -24,12 +24,12 @@ ssl_email: admin@yourdomain.com
 ssl_staging: false
 
 # Application paths
-app_home: /opt/openmeal
-app_user: openmeal
-app_group: openmeal
+app_home: /opt/boilerplate
+app_user: boilerplate
+app_group: boilerplate
 
 # Container Registry
-registry_id: crp123456
+registry_id: your-github-username
 
 # ============================================================================
 # Microservice Versions (auto-updated by CI/CD)
@@ -43,7 +43,7 @@ service_versions: {}
 
 # Backup configuration
 backup_enabled: true
-backup_s3_bucket: openmeal-backups-prod
+backup_s3_bucket: boilerplate-backups-prod
 backup_s3_region: us-east-1
 backup_s3_endpoint: https://s3.amazonaws.com
 backup_retention_days: 7

@@ -1,8 +1,8 @@
 ---
 # ============================================================================
-# OpenMeal Deploy Role - Main Tasks
+# NestJS Boilerplate Deploy Role - Main Tasks
 # ============================================================================
-# Orchestrates the deployment of OpenMeal application
+# Orchestrates the deployment of NestJS Boilerplate application
 # Delegates service management to Makefile
 #
 # Available tags:
@@ -16,9 +16,9 @@
 - name: Display deployment information
   ansible.builtin.debug:
     msg:
-      - "Deploying OpenMeal to {{ deployment_type }} environment"
-      - "Application home: {{ app_home }}"
-      - "User: {{ app_user }}"
+      - 'Deploying NestJS Boilerplate to {{ deployment_type }} environment'
+      - 'Application home: {{ app_home }}'
+      - 'User: {{ app_user }}'
   tags: [always]
 
 - name: Sync project files to server
@@ -46,8 +46,8 @@
 - name: Display deployment summary
   ansible.builtin.debug:
     msg:
-      - "✓ OpenMeal {{ deployment_type }} deployment completed"
-      - "Access your application at: https://{{ api_domain_name }}"
-      - "Keycloak admin: https://{{ keycloak_domain_name }}"
-      - "Grafana: https://{{ grafana_domain_name }}"
+      - '✓ NestJS Boilerplate {{ deployment_type }} deployment completed'
+      - 'Access your application at: https://{{ api_domain_name }}'
+      - 'Keycloak admin: https://{{ keycloak_domain_name }}'
+      - 'Grafana: https://{{ grafana_domain_name }}'
   tags: [always]

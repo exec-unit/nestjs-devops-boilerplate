@@ -8,57 +8,57 @@
 
 - name: Ensure required directories exist
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: '{{ item.path }}'
     state: directory
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: "{{ item.mode }}"
-  loop: "{{ ensure_directories }}"
+    owner: '{{ app_user }}'
+    group: '{{ app_group }}'
+    mode: '{{ item.mode }}'
+  loop: '{{ ensure_directories }}'
   loop_control:
-    label: "{{ item.path }}"
+    label: '{{ item.path }}'
 
 - name: Synchronize directories to target server
   ansible.posix.synchronize:
-    src: "{{ project_root }}/{{ item.src }}/"
-    dest: "{{ app_home }}/{{ item.dest }}/"
-    delete: "{{ item.delete | default(false) }}"
-    rsync_opts: "{{ item.rsync_opts | default([]) }}"
+    src: '{{ project_root }}/{{ item.src }}/'
+    dest: '{{ app_home }}/{{ item.dest }}/'
+    delete: '{{ item.delete | default(false) }}'
+    rsync_opts: '{{ item.rsync_opts | default([]) }}'
     # Force use of Ansible's SSH connection settings
-    dest_port: "{{ ansible_port | default(22) }}"
-    private_key: "{{ ansible_ssh_private_key_file | default(omit) }}"
+    dest_port: '{{ ansible_port | default(22) }}'
+    private_key: '{{ ansible_ssh_private_key_file | default(omit) }}'
     # Use sudo on remote side for permissions
-    rsync_path: "sudo rsync"
+    rsync_path: 'sudo rsync'
     # Override the remote user to match Ansible connection
     set_remote_user: true
   vars:
-    ansible_ssh_user: "{{ ansible_user }}"
+    ansible_ssh_user: '{{ ansible_user }}'
   become: false
   delegate_to: localhost
-  loop: "{{ sync_directories }}"
+  loop: '{{ sync_directories }}'
   loop_control:
-    label: "{{ item.name }}"
+    label: '{{ item.name }}'
   register: sync_dirs_result
 
 - name: Set ownership for synchronized directories
   ansible.builtin.file:
-    path: "{{ app_home }}/{{ item.dest }}"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
+    path: '{{ app_home }}/{{ item.dest }}'
+    owner: '{{ app_user }}'
+    group: '{{ app_group }}'
     recurse: true
-  loop: "{{ sync_directories }}"
+  loop: '{{ sync_directories }}'
   loop_control:
-    label: "{{ item.name }}"
+    label: '{{ item.name }}'
 
 - name: Copy individual files to target server
   ansible.builtin.copy:
-    src: "{{ project_root }}/{{ item.src }}"
-    dest: "{{ app_home }}/{{ item.dest }}"
-    owner: "{{ app_user }}"
-    group: "{{ app_group }}"
-    mode: "{{ item.mode }}"
-  loop: "{{ sync_files }}"
+    src: '{{ project_root }}/{{ item.src }}'
+    dest: '{{ app_home }}/{{ item.dest }}'
+    owner: '{{ app_user }}'
+    group: '{{ app_group }}'
+    mode: '{{ item.mode }}'
+  loop: '{{ sync_files }}'
   loop_control:
-    label: "{{ item.name }}"
+    label: '{{ item.name }}'
 
 - name: Make shell scripts executable
   ansible.builtin.shell: |
@@ -68,6 +68,6 @@
 - name: Display synchronization summary
   ansible.builtin.debug:
     msg:
-      - "✓ Project files synchronized to {{ app_home }}"
+      - '✓ Project files synchronized to {{ app_home }}'
       - "Directories synced: {{ sync_directories | map(attribute='name') | join(', ') }}"
       - "Files copied: {{ sync_files | map(attribute='name') | join(', ') }}"
