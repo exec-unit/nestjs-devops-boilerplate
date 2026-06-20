@@ -1,23 +1,19 @@
 # ADR-004: Git Repository as Single Source of Truth
 
 **Date:** 2025-12-19
-**Status:** Accepted  
+**Status:** Accepted
 **Deciders:** Project Lead
 
 ## Context
 
 In deployment automation, there are different approaches to managing infrastructure and application code:
 
-1. **Direct deployment from CI/CD** - CI/CD server builds and deploys directly to target
-2. **Configuration management pulls from artifact repository** - Ansible/Chef pulls artifacts
-3. **Git as source of truth** - Clone repository on CI/CD server, sync only necessary files to target
-4. **GitOps (pull-based)** - Target cluster pulls desired state from Git (ArgoCD, Flux)
+1. Direct deployment from CI/CD - CI/CD server builds and deploys directly to target
+2. Configuration management pulls from artifact repository - Ansible/Chef pulls artifacts
+3. Git as source of truth - clone repository on CI/CD server, sync only necessary files to target
+4. GitOps (pull-based) - target cluster pulls desired state from Git (ArgoCD, Flux)
 
-**Project Focus:**
-
-OpenMeal is a Java/Spring Boot microservices portfolio project demonstrating backend architecture, event-driven patterns, and deployment automation. The primary focus is on application development (business logic, microservices communication, data modeling) rather than infrastructure engineering.
-
-**GitOps vs Push-Based Deployment:**
+GitOps vs Push-Based Deployment:
 
 While GitOps (ArgoCD/Flux) provides declarative, pull-based deployments with automatic drift detection, it requires Kubernetes infrastructure and shifts focus to cluster management. For this project, implementing full GitOps would mean:
 
@@ -28,29 +24,29 @@ While GitOps (ArgoCD/Flux) provides declarative, pull-based deployments with aut
 
 ## Decision
 
-We use **Git repository as the single source of truth** with **push-based deployment via Ansible** (not full GitOps).
+Use Git repository as the single source of truth with push-based deployment via Ansible (not full GitOps).
 
 ## Implementation
 
 ### Deployment Flow
 
 ```
-Developer Push → GitHub
-                    ↓
+Developer Push -> GitHub
+                    |
               GitHub Actions (CI/CD Server)
-                    ↓
+                    |
               Clone Repository
-                    ↓
+                    |
               Run Ansible Playbook
-                    ↓
-              Rsync Selected Files → Target Server
-                    ↓
+                    |
+              Rsync Selected Files -> Target Server
+                    |
               Docker Compose Up
 ```
 
 ### What Gets Synchronized
 
-**From Git repository to target server:**
+From Git repository to target server:
 
 - `compose/` - Docker Compose files
 - `config/` - Initialization scripts and templates
@@ -58,37 +54,37 @@ Developer Push → GitHub
 - `Makefile` and `makefiles/` - Orchestration
 - `.env.infra.example` - Template for environment file
 
-**NOT synchronized:**
+NOT synchronized:
 
-- `services/` - Source code (only Docker images are pulled)
+- `apps/` and `libs/` - source code (only Docker images are pulled from the registry)
 - `.git/` - Git history
-- `infrastructure/ansible/` - Ansible playbooks themselves
+- `infrastructure/ansible/` - Ansible playbooks themselves (run from the CI/CD server)
 - Development files (`.devcontainer`, `node_modules`, etc.)
 
 ### Why This Approach
 
-**Operational Clarity:**
+Operational Clarity:
 
 - Target server contains only runtime-necessary files
 - Clear boundary between build-time and runtime artifacts
 - Deployment surface area explicitly defined in Ansible playbooks
-- Easier to audit what's actually deployed
+- Easier to audit what is actually deployed
 
-**Immutability and Reproducibility:**
+Immutability and Reproducibility:
 
 - All configuration changes versioned in Git
 - Rollback via Git checkout and redeploy
 - Audit trail for all changes
 - Consistent deployment across environments
 
-**Security Boundary:**
+Security Boundary:
 
 - Source code isolation from runtime environment
-- Blast radius reduction (compromised target doesn't expose source)
+- Blast radius reduction (compromised target does not expose source)
 - Secrets injected at deployment time, never in repository
 - No Git history accessible on production hosts
 
-**Ansible Orchestration:**
+Ansible Orchestration:
 
 - Runs on CI/CD server with full repository access
 - Selective synchronization via rsync
@@ -99,16 +95,16 @@ Developer Push → GitHub
 
 ### Problem Solved
 
-**Before (naive approach):**
+Before (naive approach):
 
 ```bash
 # On target server
-git clone https://github.com/org/openmeal.git
-cd openmeal
+git clone https://github.com/org/project.git
+cd project
 docker compose up
 ```
 
-**Issues:**
+Issues:
 
 - Entire repository on production server
 - Source code accessible in runtime environment
@@ -116,55 +112,55 @@ docker compose up
 - Unclear deployment boundary
 - Potential secrets exposure via Git history
 
-**Our approach:**
+Our approach:
 
 ```bash
 # On CI/CD server
-git clone https://github.com/org/openmeal.git
-cd openmeal
+git clone https://github.com/org/project.git
+cd project
 ansible-playbook -i inventories/prod playbooks/release.yml
 ```
 
-**Ansible playbook:**
+Ansible playbook:
 
 ```yaml
 - name: Sync compose files
   ansible.posix.synchronize:
-    src: "{{ project_root }}/compose/"
-    dest: "{{ app_home }}/compose/"
+    src: '{{ project_root }}/compose/'
+    dest: '{{ app_home }}/compose/'
 
 - name: Sync config files
   ansible.posix.synchronize:
-    src: "{{ project_root }}/config/"
-    dest: "{{ app_home }}/config/"
+    src: '{{ project_root }}/config/'
+    dest: '{{ app_home }}/config/'
 ```
 
 ### Advantages
 
-**Security Boundary:**
+Security Boundary:
 
 - Source code isolation from runtime environment
 - Operational files only on target hosts
-- Secrets injected at deployment time via Ansible vault
+- Secrets injected at deployment time via Ansible Vault
 - No Git metadata on production
 
-**Operational Clarity:**
+Operational Clarity:
 
 - Explicit deployment surface area
 - Clear separation between build and runtime artifacts
-- Ansible playbooks document exactly what's deployed
+- Ansible playbooks document exactly what is deployed
 - Easier to audit and verify deployments
 
-**Maintainability:**
+Maintainability:
 
 - CI/CD server maintains full repository context
 - Target hosts contain minimal, focused file set
 - Faster synchronization (rsync delta transfers)
 - Docker images pulled from registry (build once, deploy many)
 
-**Flexibility:**
+Flexibility:
 
-- Environment-specific deployments via Git branches
+- Environment-specific deployments via inventory groups
 - Selective file synchronization for hotfixes
 - Per-environment configuration overrides
 
@@ -172,41 +168,41 @@ ansible-playbook -i inventories/prod playbooks/release.yml
 
 ### Positive
 
-✅ **Clean Separation:**
+Clean Separation:
 
 - CI/CD server: full repository access
 - Target server: only runtime files
 
-✅ **Version Control:**
+Version Control:
 
 - All changes tracked in Git
 - Easy rollback to any commit
 
-✅ **Security:**
+Security:
 
 - Source code isolation
 - No Git history on production
 
-✅ **Operational Efficiency:**
+Operational Efficiency:
 
 - Fast synchronization via rsync delta transfers
 - Minimal deployment surface area
 
 ### Trade-offs
 
-⚠️ **Ansible Dependency:**
+Ansible Dependency:
 
 - Deployment requires Ansible on CI/CD server
 - Less aligned with push-based CD tools (ArgoCD, Flux)
 - Acceptable for current operational model
 
-⚠️ **Two-Phase Deployment:**
+Two-Phase Deployment:
 
-- Build images → Push to registry → Ansible synchronizes and deploys
+- Build images -> push to registry -> Ansible synchronizes and deploys
 - Standard practice for container-based deployments
 - Enables build once, deploy many pattern
 
-⚠️ **Runtime Debugging:**
+Runtime Debugging:
 
 - Source code not available on target hosts
 - Debugging relies on logs, metrics, and remote debugging tools
@@ -216,7 +212,7 @@ ansible-playbook -i inventories/prod playbooks/release.yml
 
 ### Ansible Synchronization Rules
 
-Defined in `infrastructure/ansible/roles/openmeal-deploy/defaults/main.yml`:
+Defined in `infrastructure/ansible/roles/nestjs_deploy/defaults/main.yml`:
 
 ```yaml
 sync_directories:
@@ -254,7 +250,7 @@ rsync_opts:
 
 ### Direct Git Clone on Target
 
-**Less aligned with operational model:**
+Less aligned with operational model:
 
 - Entire repository accessible on runtime hosts
 - Git history and metadata present
@@ -263,7 +259,7 @@ rsync_opts:
 
 ### Artifact-Based Deployment
 
-**Less aligned with current needs:**
+Less aligned with current needs:
 
 - Requires artifact repository infrastructure
 - Configuration files still need separate versioning mechanism
@@ -272,7 +268,7 @@ rsync_opts:
 
 ### Configuration Management Database (CMDB)
 
-**Less aligned with team workflow:**
+Less aligned with team workflow:
 
 - Additional system to operate and maintain
 - Git already provides versioning and audit trail
@@ -283,13 +279,14 @@ rsync_opts:
 
 ### Triggers for Alternative Approaches
 
-**GitOps (ArgoCD/Flux):**
+GitOps (ArgoCD/Flux):
 
 - Migration to Kubernetes
 - Need for declarative, pull-based deployments
 - Multiple teams requiring self-service deployments
+- Drift detection and automatic reconciliation requirements
 
-**Artifact Repository:**
+Artifact Repository:
 
 - Regulatory requirements for artifact retention
 - Need for binary provenance tracking
@@ -297,7 +294,7 @@ rsync_opts:
 
 ### Migration Strategy
 
-**To GitOps:**
+To GitOps:
 
 1. Migrate to Kubernetes (see ADR-003)
 2. Restructure repository for Kustomize/Helm
@@ -305,7 +302,7 @@ rsync_opts:
 4. Configure Git repository as source of truth
 5. Transition from Ansible push to GitOps pull
 
-**Estimated effort:** 3-5 days after Kubernetes migration
+Estimated effort: 3-5 days after Kubernetes migration
 
 ## Related Decisions
 

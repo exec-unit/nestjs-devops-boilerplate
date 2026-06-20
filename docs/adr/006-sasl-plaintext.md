@@ -1,53 +1,53 @@
 # ADR-006: SASL_PLAINTEXT for Redpanda Authentication
 
 **Date:** 2025-12-19
-**Status:** Accepted  
+**Status:** Accepted
 **Deciders:** Project Lead
 
 ## Context
 
 Redpanda supports multiple security protocols for client authentication:
 
-**Available Options:**
+Available options:
 
-- **PLAINTEXT** - No authentication, no encryption
-- **SASL_PLAINTEXT** - Authentication via SASL, no encryption
-- **SASL_SSL** - Authentication via SASL, TLS encryption
-- **SSL** - TLS encryption, certificate-based authentication
+- PLAINTEXT - no authentication, no encryption
+- SASL_PLAINTEXT - authentication via SASL, no encryption
+- SASL_SSL - authentication via SASL, TLS encryption
+- SSL - TLS encryption, certificate-based authentication
 
-**Deployment Scenarios:**
+Deployment scenarios:
 
-- **local-dev:** Developers connect to shared-dev Redpanda over internet (port 19092)
-- **shared-dev:** Redpanda exposed externally for local developers
-- **stage/prod:** Redpanda internal-only (port 9092), no external access
+- local-dev: developers connect to shared-dev Redpanda over the internet (port 19092)
+- shared-dev: Redpanda exposed externally for local developers
+- stage/prod: Redpanda internal-only (port 9092), no external access
 
 ## Decision
 
-Use **SASL_PLAINTEXT** (SASL/SCRAM-SHA-256 authentication without TLS encryption).
+Use SASL_PLAINTEXT (SASL/SCRAM-SHA-256 authentication without TLS encryption).
 
 ## Rationale
 
 ### Why SASL_PLAINTEXT
 
-**Network Topology:**
+Network Topology:
 
-**shared-dev (external port):**
+shared-dev (external port):
 
 - Only environment with external Redpanda access
-- Contains test data only (no production/sensitive data)
+- Contains test data only (no production or sensitive data)
 - Used for development and testing
 - Acceptable risk: credentials exposed in transit
 
-**stage/prod (internal-only):**
+stage/prod (internal-only):
 
 - Redpanda port 9092 not exposed externally
 - Communication only within Docker network
 - Firewall blocks external access
 - TLS security benefit exists but risk profile acceptable for current scope
 
-**Operational Complexity vs Security Benefit:**
+Operational Complexity vs Security Benefit:
 
-**TLS Certificate Management Requirements:**
+TLS Certificate Management Requirements:
 
 - Certificate generation and rotation automation
 - CA certificate distribution to all microservices
@@ -56,78 +56,81 @@ Use **SASL_PLAINTEXT** (SASL/SCRAM-SHA-256 authentication without TLS encryption
 - Certificate expiration monitoring
 - Debugging TLS handshake failures
 
-**Time Investment:**
+Time Investment:
 
-- Initial setup: 1 day (certificate generation, Spring Boot configuration, testing, troubleshooting)
+- Initial setup: ~1 day (certificate generation, NestJS configuration, testing, troubleshooting)
 - Ongoing maintenance: certificate rotation (quarterly), monitoring
 - Focus shift from application architecture to certificate operations
 
-**Spring Boot Configuration Comparison:**
+NestJS Configuration Comparison:
 
-**SASL_PLAINTEXT (current):**
+SASL_PLAINTEXT (current):
 
-```yaml
-security.protocol: SASL_PLAINTEXT
-sasl.mechanism: SCRAM-SHA-256
-sasl.jaas.config: ScramLoginModule required username="..." password="...";
+```typescript
+sasl: {
+  mechanism: 'scram-sha-256',
+  username: process.env.REDPANDA_USERNAME,
+  password: process.env.REDPANDA_PASSWORD,
+}
 ```
 
-**SASL_SSL (alternative):**
+SASL_SSL (alternative, additional configuration required):
 
-```yaml
-security.protocol: SASL_SSL
-sasl.mechanism: SCRAM-SHA-256
-sasl.jaas.config: ScramLoginModule required username="..." password="...";
-ssl.truststore.location: /path/to/truststore.jks
-ssl.truststore.password: ${TRUSTSTORE_PASSWORD}
-ssl.keystore.location: /path/to/keystore.jks
-ssl.keystore.password: ${KEYSTORE_PASSWORD}
-ssl.endpoint.identification.algorithm: ""
+```typescript
+sasl: {
+  mechanism: 'scram-sha-256',
+  username: process.env.REDPANDA_USERNAME,
+  password: process.env.REDPANDA_PASSWORD,
+},
+ssl: {
+  rejectUnauthorized: true,
+  ca: fs.readFileSync('/path/to/ca.crt'),
+  cert: fs.readFileSync('/path/to/client.crt'),
+  key: fs.readFileSync('/path/to/client.key'),
+}
 ```
 
 Additional operational burden:
 
-- Truststore/keystore files in Docker images or mounted volumes
-- Environment-specific certificate paths
+- Certificate files in Docker images or mounted volumes
+- Environment-specific certificate paths per container
 - Certificate validation configuration
 - TLS version and cipher suite management
 
 ### Risk Assessment
 
-**shared-dev External Exposure:**
+shared-dev External Exposure:
 
-**Threat:** Credential interception during transit  
-**Likelihood:** Low (requires active network monitoring)  
-**Impact:** Access to test environment only  
-**Risk Acceptance:**
+- Threat: credential interception during transit
+- Likelihood: low (requires active network monitoring)
+- Impact: access to test environment only
+- Risk Acceptance:
+  - Test data only, no sensitive information
+  - Credential rotation policy in place
+  - Optional IP allowlist can further reduce exposure
 
-- Test data only, no sensitive information
-- Credential rotation policy in place
-- Optional IP allowlist can further reduce exposure
+stage/prod Internal Communication:
 
-**stage/prod Internal Communication:**
-
-**Threat:** Network sniffing within Docker network  
-**Likelihood:** Very low (requires host compromise)  
-**Impact:** If host is compromised, TLS provides limited additional protection  
-**Risk Acceptance:**
-
-- Attacker with host access has filesystem and memory access
-- TLS protects data in transit but not at rest or in memory
-- Defense-in-depth focuses on host hardening (SSH keys, fail2ban, firewall, minimal attack surface)
+- Threat: network sniffing within Docker network
+- Likelihood: very low (requires host compromise)
+- Impact: if host is compromised, TLS provides limited additional protection
+- Risk Acceptance:
+  - Attacker with host access has filesystem and memory access
+  - TLS protects data in transit but not at rest or in memory
+  - Defense-in-depth focuses on host hardening (SSH keys, fail2ban, firewall, minimal attack surface)
 
 ### Security Model Analysis
 
-**Current Approach: Network Boundary Security**
+Current Approach - Network Boundary Security:
 
 - External firewall blocks unauthorized access
 - Docker network isolation for internal communication
 - SASL authentication prevents unauthorized clients
 - Host hardening as primary security layer
 
-**Alternative: Zero Trust with mTLS**
+Alternative - Zero Trust with mTLS:
 
-**Requirements:**
+Requirements:
 
 - Mutual TLS between all microservices
 - Certificate authority infrastructure
@@ -135,13 +138,13 @@ Additional operational burden:
 - Service mesh (Istio/Linkerd) or manual certificate management
 - TLS configuration for all service-to-service calls
 
-**Operational Impact:**
+Operational Impact:
 
 - Initial implementation: 2-3 days (CA setup, certificate distribution, service configuration, testing)
 - Ongoing maintenance: certificate rotation, monitoring, troubleshooting
 - Increased complexity in debugging (encrypted traffic, certificate validation errors)
 
-**Trade-off Analysis:**
+Trade-off Analysis:
 
 Security benefit exists but is limited in current architecture:
 
@@ -157,7 +160,7 @@ Operational cost is significant:
 - Maintenance burden
 - Focus shift from application features to security infrastructure
 
-**Decision:** Accept current risk profile, prioritize application architecture development
+Decision: Accept current risk profile, implement SASL_PLAINTEXT now with a defined migration path to SASL_SSL.
 
 ## Implementation
 
@@ -181,39 +184,45 @@ rpk acl user create admin -p "${REDPANDA_SUPERUSER_PASSWORD}" \
   --mechanism SCRAM-SHA-256
 ```
 
-### Spring Boot Configuration
+### NestJS Configuration
 
-```yaml
-spring:
-  cloud:
-    stream:
-      kafka:
-        binder:
-          brokers: ${REDPANDA_BROKERS}
-          configuration:
-            security.protocol: SASL_PLAINTEXT
-            sasl.mechanism: SCRAM-SHA-256
-            sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${REDPANDA_USERNAME}" password="${REDPANDA_PASSWORD}";
+```typescript
+ClientsModule.register([
+  {
+    name: 'EVENTS_SERVICE',
+    transport: Transport.KAFKA,
+    options: {
+      client: {
+        brokers: [process.env.REDPANDA_BROKERS],
+        sasl: {
+          mechanism: 'scram-sha-256',
+          username: process.env.REDPANDA_USERNAME,
+          password: process.env.REDPANDA_PASSWORD,
+        },
+      },
+    },
+  },
+])
 ```
 
 ## Consequences
 
 ### Positive
 
-✅ **Operational Simplicity:**
+Operational Simplicity:
 
 - No certificate management
 - No truststore/keystore distribution
 - Simpler debugging (no TLS handshake issues)
 - Faster development iteration
 
-✅ **Authentication Enabled:**
+Authentication Enabled:
 
 - SASL/SCRAM-SHA-256 prevents unauthorized access
 - Credentials required for all connections
 - ACLs can be configured per user
 
-✅ **Performance:**
+Performance:
 
 - No TLS encryption overhead
 - Lower CPU usage
@@ -221,27 +230,27 @@ spring:
 
 ### Negative
 
-⚠️ **Credentials in Transit (shared-dev only):**
+Credentials in Transit (shared-dev only):
 
-- Credentials visible if network traffic intercepted
-- _Mitigation:_ Test data only, regular credential rotation
+- Credentials visible if network traffic is intercepted
+- Mitigation: test data only, regular credential rotation
 
-⚠️ **Not Zero Trust:**
+Not Zero Trust:
 
 - Assumes VDS network is trusted
-- _Mitigation:_ VDS hardening, firewall, SSH key auth
+- Mitigation: VDS hardening, firewall, SSH key auth only
 
 ### Migration Path
 
 If security requirements change:
 
 1. Generate TLS certificates (Let's Encrypt or self-signed CA)
-2. Update Redpanda configuration to enable TLS
-3. Distribute truststore to all microservices
-4. Update Spring Boot configuration to `SASL_SSL`
+2. Update Redpanda configuration to enable TLS listeners
+3. Distribute CA certificate to all microservices
+4. Update NestJS Kafka client configuration to include `ssl` options
 5. Test and deploy
 
-**Estimated effort:** 1 day for single-host deployment
+Estimated effort: 1 day for single-host deployment
 
 ## Related Decisions
 
@@ -252,3 +261,4 @@ If security requirements change:
 
 - [Redpanda Security Documentation](https://docs.redpanda.com/docs/security/)
 - [Kafka SASL/SCRAM Authentication](https://kafka.apache.org/documentation/#security_sasl_scram)
+- [KafkaJS SSL/SASL Configuration](https://kafka.js.org/docs/configuration#ssl)

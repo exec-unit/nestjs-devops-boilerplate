@@ -1,74 +1,65 @@
 # ADR-001: Monorepo Strategy for Microservices
 
-**Date:** 2025-12-17  
-**Status:** Accepted  
+**Date:** 2025-12-17
+**Status:** Accepted
 **Deciders:** Project Lead
 
 ## Context
 
-OpenMeal is a pet project designed to demonstrate enterprise-grade architecture and development practices. The platform consists of multiple microservices (Auth, User, Restaurant, Order, Payment, Dispatch, Tracking, File, External Sender, Support, Admin, Report) plus infrastructure.
+The boilerplate is designed for multi-service NestJS backends. The repository needs to contain both the application services and the entire DevOps infrastructure.
 
-**Project Goals:**
+Repository organization options:
 
-- Showcase architectural decisions and development methodologies
-- Demonstrate end-to-end food delivery platform implementation
-- Serve as portfolio piece highlighting technical skills
-- Maintain rapid development velocity as solo developer
-
-**Repository Organization Options:**
-
-1. **Polyrepo** - Each microservice in separate repository (11+ repos)
-2. **Monorepo** - All services in single repository
-3. **Hybrid** - Core services together, auxiliary services separate
+1. Polyrepo - each microservice in a separate repository
+2. Monorepo - all services in a single repository with `pnpm` workspaces
+3. Hybrid - core services together, auxiliary services separate
 
 ## Decision
 
-Use **monorepo** with Maven multi-module structure.
+Use monorepo with `pnpm` workspace structure.
 
 ## Rationale
 
 ### Why Monorepo for This Project
 
-**Solo Developer Efficiency:**
+Solo Developer Efficiency:
 
-- Single `git clone` for entire platform
+- Single `git clone` for the entire platform
 - All code searchable in one IDE workspace
-- No context switching between 11+ repositories
+- No context switching between multiple repositories
 
-**Atomic Cross-Service Changes:**
+Atomic Cross-Service Changes:
 
-- Update event schemas across publishers/subscribers in one commit
-- Refactor shared DTOs or authentication in single PR
+- Update event schemas across publishers and subscribers in one commit
+- Refactor shared DTOs or types in a single PR
 - No version coordination between repositories
 
-**Unified CI/CD:**
+Unified CI/CD:
 
-- Single GitHub Actions workflow
-- Incremental builds (only changed services)
-- Shared Docker layer cache
+- Single GitHub Actions workflow with `dorny/paths-filter` for incremental builds
+- Shared Docker layer cache across services
+- One place for lint, test, and build configuration
 
-**Portfolio Value:**
+Shared Libraries Without Registry:
 
-- Complete system visible in one repository
-- Single entry point for reviewers
-- Demonstrates full-stack architecture understanding
+- `libs/*` packages referenced via `workspace:*` protocol in `package.json`
+- No need to publish internal packages to npm
+- Type-safe cross-service contracts enforced at build time
 
 ### Trade-offs
 
-**Not Polyrepo Because:**
+Not Polyrepo Because:
 
-- 11 repositories = 11 CI/CD configurations to maintain
+- Multiple repositories = multiple CI/CD configurations to maintain
 - Cross-service changes require multiple PRs and coordination
 - Dependency version drift between services
 - Harder to demonstrate cohesive architecture
-- Overkill for solo developer pet project
 
-**Not Hybrid Because:**
+Not Hybrid Because:
 
 - Adds complexity without benefits at this scale
-- Still requires coordination between repos
-- Unclear boundaries: which services go where?
-- Portfolio presentation becomes fragmented
+- Still requires coordination between repos for infrastructure changes
+- Unclear service boundaries for splitting
 
 ## Implementation
 
@@ -76,48 +67,47 @@ Use **monorepo** with Maven multi-module structure.
 
 ```
 .
-├── pom.xml
-├── services/
-│   ├── api-gateway/
+├── pnpm-workspace.yaml
+├── apps/
 │   └── user-service/
+├── libs/
 ├── infrastructure/
 ├── compose/
 ├── config/
 └── makefiles/
 ```
 
-### Maven Multi-Module
+### pnpm Workspaces
 
-- Parent POM defines dependency management
-- Each service is a Maven module
-- Modules can be built independently: `./mvnw -pl services/user-service package`
+- `apps/*` - NestJS microservices, each with its own `package.json`
+- `libs/*` - Shared TypeScript packages referenced via `workspace:*`
+- Root `package.json` contains shared dev dependencies (ESLint, Prettier, Jest, SWC, commitlint, husky)
 
 ### CI/CD Strategy
 
-- Detect changed services via `git diff`
-- Build only changed Docker images
-- Deploy only updated services (incremental deployment)
+- `dorny/paths-filter` detects changed `apps/` directories per push
+- Only changed services are built and pushed to the container registry
+- Ansible deploys only updated services (incremental deployment)
 
 ## Consequences
 
 ### Positive
 
-- ✅ Faster development velocity (no cross-repo coordination)
-- ✅ Easier refactoring and code sharing
-- ✅ Consistent tooling and standards
-- ✅ Simplified local development setup
+- Faster development velocity with no cross-repo coordination
+- Consistent tooling: single ESLint config, single tsconfig, single Prettier config
+- Shared `libs/` packages consumed without publishing to npm
+- Simplified local development setup: single `pnpm install` at root
 
 ### Negative
 
-- ⚠️ Requires discipline to avoid tight coupling between services
-- ⚠️ Need clear module boundaries and ownership
-- ⚠️ Larger initial clone size (acceptable trade-off)
+- Requires discipline to avoid tight coupling between services via `libs/`
+- Larger initial clone size (acceptable trade-off)
 
 ## Alternatives Considered
 
 ### Polyrepo
 
-**Rejected because:**
+Rejected because:
 
 - Overhead of maintaining multiple CI/CD pipelines
 - Difficult to make atomic changes across services
@@ -126,19 +116,18 @@ Use **monorepo** with Maven multi-module structure.
 
 ### Hybrid (Monorepo + Polyrepo)
 
-**Rejected because:**
+Rejected because:
 
-- Adds complexity without clear benefits for our team size
+- Adds complexity without clear benefits for current team size
 - Still requires cross-repo coordination for some changes
-- May revisit if team grows significantly (>20 developers)
 
 ## Related Decisions
 
-- [ADR-002: Redpanda vs Kafka](002-redpanda.md)
+- [ADR-002: Redpanda for Event Streaming](002-redpanda.md)
 - [ADR-003: Docker Compose for Container Management](003-docker-compose.md)
 
 ## References
 
 - [Monorepo.tools](https://monorepo.tools/)
 - [Google's Monorepo Philosophy](https://research.google/pubs/pub45424/)
-- [Maven Multi-Module Projects](https://maven.apache.org/guides/mini/guide-multiple-modules.html)
+- [pnpm Workspaces](https://pnpm.io/workspaces)
