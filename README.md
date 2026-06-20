@@ -1,126 +1,109 @@
-# OpenMeal Monorepo
+# NestJS DevOps Boilerplate
 
-[![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.3-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Node.js](https://img.shields.io/badge/Node.js-22-green.svg)](https://nodejs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-11-E0234E.svg)](https://nestjs.com/)
+[![pnpm](https://img.shields.io/badge/pnpm-11+-orange.svg)](https://pnpm.io/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
-![Status](https://img.shields.io/badge/Status-In%20Development-yellow.svg)
 
-> **⚠️ Project Status:** This repository is under active development. The documentation describes the target architecture for the complete system. See [Implementation Status](#implementation-status) below for current progress.
+NestJS monorepo template with a pre-configured DevOps foundation.
 
-**OpenMeal** is a server-side platform for food ordering and delivery from restaurants and cafes, uniting all process participants: customers, establishments, couriers, support service, and administrators.
+Most NestJS projects start from a `nest new` and then incrementally add Docker Compose, CI/CD, secrets management, and deployment automation - each requiring separate setup and maintenance. This repository provides that foundation already assembled: environment separation via Docker Compose profiles, a GitHub Actions pipeline with incremental builds and image scanning, Ansible playbooks for provisioning and deployment to a VPS, and a NestJS monorepo structure with tooling configured.
 
-## Platform Capabilities
+What is pre-configured out of the box:
 
-The platform implements complete food delivery workflow:
+- Four environments via Docker Compose profiles (local-dev / shared-dev / stage / prod)
+- Incremental CI/CD via `dorny/paths-filter` - only changed services rebuild; Trivy scans every image
+- Ansible IaC: `generate-vault.py` converts GitHub Secrets to Ansible Vault, playbooks provision and deploy to VPS
+- NestJS monorepo with `pnpm` workspaces, SWC, strict ESLint/Prettier, Husky, commitlint, `@nestjs/terminus`, `prom-client`
 
-- **Customer Experience**: Browse restaurants, order food, track courier in real-time, receive notifications
-- **Restaurant Management**: Menu management, order processing, preparation status updates
-- **Courier Coordination**: Automated courier assignment algorithm based on proximity and availability
-- **Support Operations**: Incident handling, refunds, account management with escalation workflows
-- **Administration**: Restaurant verification, permanent account actions, operational analytics
+## Table of Contents
 
-The platform is designed as a backend-ready system with API-first architecture, prepared for frontend integration.
+- [Quick Start](#quick-start)
+- [Environment Strategy](#environment-strategy)
+- [What Is Pre-configured](#what-is-pre-configured)
+- [Repository Structure](#repository-structure)
+- [Configuration Management](#configuration-management)
+- [Common Commands](#common-commands)
+- [Documentation](#documentation)
+- [Technology Stack](#technology-stack)
+- [Testing](#testing)
+- [Adding a New Microservice](#adding-a-new-microservice)
+- [Troubleshooting](#troubleshooting)
 
-## 🚀 Quick Start
+## Quick Start
 
-**Prerequisites:**
+Prerequisites:
 
-- Docker & Docker Compose (v2.0+)
-- Java 21+
+- Docker & Docker Compose v2+
+- Node.js 22+
+- pnpm 11+
 - Make
-- yq (for local development with `microservices.local`)
 
-**First Time Setup:**
+First time setup:
 
 ```bash
-# 1. Initialize configuration files
+# 1. Initialize configuration files from examples
 make init
 
-# 2. Configure environment
-cp .env.infra.example .env.infra
-nano .env.infra
-```
+# 2. Edit the generated .env.infra
+# Set ENVIRONMENT=local-dev
+# Set passwords for databases
 
-Edit `.env.infra`:
+# 3. Install dependencies and register git hooks
+pnpm install
+pnpm prepare
 
-- Set `ENVIRONMENT=local-dev`
-- Configure passwords for databases
-- See `config/` directory documentation below
-
-```bash
-# 3. Install pre-commit hooks (recommended)
-pipx install pre-commit
-pre-commit install --hook-type pre-commit --hook-type commit-msg
-
-# 4. Start infrastructure and services
+# 4. Start infrastructure
 make up
 ```
 
 ### Verify Everything Works
 
 ```bash
-# Check health of all services
 make check-services
-
-# View logs
 make logs
 ```
 
-**Access Points:**
+## Environment Strategy
 
-- API Gateway: http://localhost:8080/api
-- Individual microservices: Check `docker-compose.yml` for port mappings
+| Environment  | Active Services                      | Use Case                                      |
+| ------------ | ------------------------------------ | --------------------------------------------- |
+| `local-dev`  | Postgres, MongoDB, Redis, MinIO      | Developer laptop                              |
+| `shared-dev` | + Keycloak, Redpanda, Nginx          | Shared VDS; local devs connect to it remotely |
+| `stage`      | Full stack, no MinIO (uses cloud S3) | Pre-production testing                        |
+| `prod`       | Full stack + Prometheus/Grafana      | Production                                    |
 
-## 🌍 Environment Strategy
+`ENVIRONMENT` is read from `.env.infra`. On `local-dev`, Keycloak and Redpanda are not started - they run on the shared VDS and local services connect via the external port. This means a developer laptop only runs lightweight infra.
 
-The project supports 4 deployment environments with different service activation:
+The Docker Compose profiles that `make up` activates are not 1:1 with environment names. The `prod` environment, for example, activates both the `prod` and `monitoring` profiles. See [Architecture Overview](docs/ARCHITECTURE.md#deployment-model) for the exact mapping.
 
-| Environment    | Profile      | Active Services                 | Use Case                             |
-| -------------- | ------------ | ------------------------------- | ------------------------------------ |
-| **local-dev**  | `local-dev`  | Postgres, MongoDB, Redis, MinIO | Developer laptop (minimal resources) |
-| **shared-dev** | `shared-dev` | + Keycloak, Redpanda, Nginx     | Shared development VDS               |
-| **stage**      | `stage`      | Full stack (no MinIO)           | Pre-production testing               |
-| **prod**       | `prod`       | Full + Prometheus/Grafana       | Production deployment                |
+## What Is Pre-configured
 
-Environment is controlled by `ENVIRONMENT` variable in `.env.infra`.
+Infrastructure & DevOps:
 
-<span id="implementation-status"></span>
+- Docker Compose multi-environment orchestration with profiles
+- Ansible deployment automation for `shared-dev`, `stage`, `prod`
+- GitHub Actions CI/CD: path-based incremental builds, Trivy vulnerability scanning, `ansible-lint`
+- Secrets: Ansible Vault + GitHub Secrets pipeline
+- SSL/TLS: Let's Encrypt with auto-renewal via Certbot
+- Monitoring: Prometheus + Grafana (prod only)
 
-## 🎯 Implementation Status
+NestJS application layer:
 
-**Infrastructure & DevOps:**
+- Node.js v22, NestJS v11, TypeScript with strict mode
+- `swc` compiler for builds and Jest transforms
+- `pnpm` workspaces: `apps/*` for services, `libs/*` for shared code
+- ESLint (flat config), Prettier, `lint-staged`, `husky` pre-commit hooks
+- `commitlint` with Conventional Commits config
+- `pino` for JSON logging, `@nestjs/terminus` for healthchecks, `prom-client` for Prometheus metrics
 
-- ✅ Docker Compose orchestration with multi-environment support
-- ✅ Ansible deployment automation (staging/production)
-- ✅ GitHub Actions CI/CD pipeline
-- ✅ Secrets management (Ansible Vault + GitHub Secrets)
-- ✅ SSL/TLS automation (Let's Encrypt)
-- ✅ Monitoring stack (Prometheus + Grafana)
-
-**Microservices (Target: 13 services):**
-
-- 🚧 **API Gateway** - Routing, authentication, rate limiting (In Progress)
-- 🚧 **User Service** - User profiles, addresses, preferences (In Progress)
-- 🚧 **Auth Service** - Authentication, JWT tokens (In Progress)
-- ⏳ **Restaurant Service** - Menus, schedules, reviews (Planned)
-- ⏳ **Order Service** - Order lifecycle, status management (Planned)
-- ⏳ **Payment Service** - ЮKassa integration, refunds (Planned)
-- ⏳ **Dispatch Service** - Courier assignment algorithm (Planned)
-- ⏳ **Tracking Service** - Real-time location tracking (Planned)
-- ⏳ **File Service** - File upload, S3 storage (Planned)
-- ⏳ **External Sender** - Push/SMS/Email notifications (Planned)
-- ⏳ **Support Service** - Incident handling, escalation (Planned)
-- ⏳ **Admin Service** - Verification, analytics (Planned)
-- ⏳ **Report Service** - Data aggregation, dashboards (Planned)
-
-> **Note:** Documentation reflects the complete target architecture. Features marked as "Planned" are designed but not yet implemented.
-
-## 📂 Repository Structure
+## Repository Structure
 
 ```
 .
-├── services/
-│   └── [microservice-name]/
+├── apps/
+│   └── user-service/
+├── libs/
 ├── infrastructure/
 │   ├── ansible/
 │   └── keycloak/
@@ -131,293 +114,174 @@ Environment is controlled by `ENVIRONMENT` variable in `.env.infra`.
 │   ├── postgres/
 │   ├── mongodb/
 │   ├── redpanda/
-│   └── nginx/
+│   ├── nginx/
+│   └── minio/
 ├── scripts/
 ├── makefiles/
 └── docs/
 ```
 
-**Key directories:**
+- `apps/` - NestJS microservices (one per subdirectory, each is an independent pnpm workspace package)
+- `libs/` - Shared TypeScript libraries consumed by services
+- `infrastructure/` - Ansible playbooks, roles, Keycloak realm customization
+- `compose/` - Docker Compose files for infra services and monitoring
+- `config/` - Init scripts and templates for databases and infrastructure services
+- `scripts/` - Health check, backup, SSL utility scripts
+- `makefiles/` - Modular Makefile includes split by concern
+- `docs/` - Architecture docs and ADRs
 
-- `services/` - Spring Boot microservices (domain-driven modules)
-- `infrastructure/` - Ansible playbooks, roles, and Keycloak customization
-- `compose/` - Docker Compose files for infrastructure and monitoring
-- `config/` - Initialization scripts and templates for databases, Redpanda, Nginx
-- `scripts/` - Utility scripts for health checks, backups, SSL management
-- `makefiles/` - Modular Makefile includes for different concerns
-- `docs/` - Architecture documentation and ADRs
-
-## ⚙️ Configuration Management
+## Configuration Management
 
 ### The `config/` Directory
 
-This directory contains initialization scripts and configuration templates for infrastructure services. It solves the problem of **environment-aware service initialization** and **secrets injection**.
+Initialization scripts and configuration templates for infrastructure services. Handles environment-aware service initialization and secrets injection at container startup.
 
-**Structure:**
+Structure:
 
 ```
 config/
 ├── postgres/
 │   ├── init-db.sh
-│   ├── init-users.conf
-│   ├── init-users.conf.example
-│   └── check-and-init.sh
-├── mongodb/
-│   ├── init-db.sh
-│   ├── init-users.conf
+│   ├── check-and-init.sh
+│   ├── init-users.conf           (gitignored, generated from .example)
 │   └── init-users.conf.example
+├── mongodb/
 ├── redpanda/
-│   ├── redpanda.yaml.template
-│   ├── generate-config.sh
-│   └── bootstrap-user.sh
 ├── nginx/
-│   ├── default.conf.template
-│   └── default-http-only.conf.template
 └── minio/
-    ├── init-buckets.sh
-    └── init-users.conf.example
 ```
 
-**How it works:**
-
-1. **Template files** (`.example`, `.template`) are committed to Git
-2. **Actual config files** (`.conf`, `.yaml`) are gitignored and generated locally or by Ansible
-3. **Init scripts** read config files and create database users, buckets, etc.
-4. **Environment variables** from `.env.infra` are resolved at runtime
-
-**Example: PostgreSQL User Initialization**
-
-`config/postgres/init-users.conf`:
+Example - `config/postgres/init-users.conf`:
 
 ```
-keycloak:KEYCLOAK_DB_PASSWORD:keycloak
 user_service:USER_SERVICE_DB_PASSWORD:users
-order_service:ORDER_SERVICE_DB_PASSWORD:orders
 ```
 
-Format: `username:ENV_VAR_NAME:database`
+Format: `username:ENV_VAR_NAME:database`. When the container starts, `init-db.sh` reads this file, resolves `$USER_SERVICE_DB_PASSWORD` from the environment, and creates the user and database if they do not exist. Adding a new service database is a one-line change in this file.
 
-The `init-db.sh` script:
+The Nginx config works the same way: `config/nginx/default.conf.template` contains `$VARIABLE` placeholders that are substituted at container startup via `envsubst` from values in `.env.infra`.
 
-- Reads this file
-- Resolves `$KEYCLOAK_DB_PASSWORD` from environment
-- Creates user and database if they don't exist
-- Grants necessary privileges
+### Secrets Management
 
-**Environment-Aware Activation:**
+Local development:
 
-The `scripts/prepare-db-configs.sh` script modifies `init-users.conf` based on `ENVIRONMENT`:
+1. Run `make init` to copy all `.example` files
+2. Edit `.env.infra` with database passwords
+3. Edit `config/postgres/init-users.conf` to map service users to env vars
 
-- `local-dev` - Comments out Keycloak (uses shared-dev instance)
-- `shared-dev` - Only Keycloak active
-- `stage/prod` - All users active
+Production:
 
-This prevents resource waste and ensures proper service isolation.
+```
+GitHub Secrets -> generate-vault.py -> vault.yml -> Ansible -> .env.infra on server
+```
 
-### Secrets Management Strategy
+See [infrastructure/README.md](infrastructure/README.md) for the full Ansible flow.
 
-**Local Development:**
-
-1. Copy example files:
-
-   ```bash
-   make init
-   ```
-
-2. Edit `.env.infra`:
-
-   ```bash
-   POSTGRES_PASSWORD=local_dev_password
-   REDIS_PASSWORD=local_dev_redis
-   KEYCLOAK_DB_PASSWORD=local_kc_password
-   ```
-
-3. Edit `config/postgres/init-users.conf`:
-
-   ```
-   user_service:USER_SERVICE_DB_PASSWORD:users
-   ```
-
-4. Add to `.env.infra`:
-   ```bash
-   USER_SERVICE_DB_PASSWORD=user_svc_password
-   ```
-
-**Production Deployment:**
-
-GitHub Secrets → `generate-vault.py` → `vault.yml` → Ansible → `.env.infra` on server
-
-See [infrastructure/README.md](infrastructure/README.md) for details.
-
-### Local Development with Selective Services
-
-**Problem:** Running all microservices locally consumes too much RAM.
-
-**Solution:** `microservices.local` file for selective activation.
-
-1. Copy example:
-
-   ```bash
-   cp microservices.local.example microservices.local
-   ```
-
-2. Uncomment services you want to run:
-
-   ```
-   user-service
-   order-service
-   ```
-
-3. Generate local compose file:
-
-   ```bash
-   make init-local
-   ```
-
-   This creates `compose/docker-compose.local.yml` that builds images from source.
-
-4. Start only selected services:
-   ```bash
-   make up
-   ```
-
-**How it works:**
-
-- `makefiles/local-dev.mk` reads `microservices.local`
-- Uses `yq` to filter services from `docker-compose.yml`
-- Generates `compose/docker-compose.local.yml` with `build:` instead of `image:`
-- `makefiles/docker.mk` includes this file when `ENVIRONMENT=local-dev`
-
-This allows developers to run only the services they're working on, while infrastructure (Postgres, Redis, etc.) always runs.
-
-## 🛠 Common Commands
-
-**Essential commands:**
+## Common Commands
 
 ```bash
-# Start all services
+# Start infrastructure for current ENVIRONMENT
 make up
-# Stop all services
+
+# Stop services
 make down
+
 # View logs
 make logs
-# Build Maven projects
-make build
-# Health check
+
+# Build all NestJS apps
+pnpm build
+
+# Run all workspace tests
+pnpm test
+
+# Health check all containers
 make check-services
 ```
 
-**Service-specific operations:**
+Service-specific:
 
 ```bash
 make up SERVICES=user-service
-make restart SERVICES="order-service payment-service"
-make logs SERVICES=payment-service
+make restart SERVICES=user-service
+make logs SERVICE=user-service
 ```
 
-For complete command reference including database operations, SSL management, backups, and advanced options, see [docs/MAKEFILE.md](docs/MAKEFILE.md).
+For complete command reference, see [docs/MAKEFILE.md](docs/MAKEFILE.md).
 
-## 📖 Documentation
+## Documentation
 
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design, deployment model, variable flow
-- **[Makefile Reference](docs/MAKEFILE.md)** - Complete command guide
-- **[Infrastructure Guide](infrastructure/README.md)** - Ansible deployment process
-- **[ADRs](docs/adr/)** - Architecture decision records
+- [Architecture Overview](docs/ARCHITECTURE.md) - Deployment model, environment strategy, secrets flow
+- [Makefile Reference](docs/MAKEFILE.md) - All `make` commands
+- [Infrastructure Guide](infrastructure/README.md) - Ansible deployment process
+- [ADRs](docs/adr/) - Architecture decision records
 
-## 🏗 Technology Stack
+## Technology Stack
 
-**Backend:**
+Backend:
 
-- Java 21, Spring Boot 4.0.3, Spring Cloud 2025.1.1
-- Maven (multi-module monorepo)
+- Node.js 22, NestJS 11, TypeScript (strict)
+- `pnpm` 11 workspaces
+- `swc` (compilation and Jest transforms)
 
-**Infrastructure:**
+Infrastructure:
 
 - PostgreSQL, MongoDB, Redis
-- Redpanda (Kafka-compatible event streaming)
-- Keycloak (Identity & Access Management)
-- MinIO (S3-compatible storage, local-dev only)
-- Nginx (Reverse proxy with SSL)
+- Redpanda (Kafka-compatible, single-binary, no Zookeeper)
+- Keycloak (OAuth2/OIDC identity provider)
+- MinIO (S3-compatible, local-dev only)
+- Nginx (reverse proxy with SSL termination)
 
-**DevOps:**
+DevOps:
 
-- Docker Compose
-- Ansible (deployment automation)
+- Docker Compose with profiles
+- Ansible (deployment automation, see [ADR-005](docs/adr/005-ansible.md))
 - GitHub Actions (CI/CD)
-- Prometheus + Grafana (monitoring, prod only)
+- Prometheus + Grafana (prod only)
 
-**Why Docker Compose over Kubernetes?**
+Docker Compose was chosen over Kubernetes to avoid cluster management overhead at this scale. See [ADR-003](docs/adr/003-docker-compose.md) for the rationale and defined migration triggers.
 
-Docker Compose chosen to minimize operational overhead and focus on application architecture. Managing Kubernetes clusters (etcd, control plane, CNI, ingress controllers) would shift focus from building microservices to infrastructure administration. For this project scope, Docker Compose provides sufficient container management without the complexity of cluster orchestration. See [ADR-003](docs/adr/003-docker-compose.md) for detailed rationale.
-
-## 🔐 Security & Secrets
-
-**Local Development:**
-
-- Secrets in `.env.infra` (gitignored)
-- Database credentials in `config/*/init-users.conf` (gitignored)
-
-**Production:**
-
-- GitHub Secrets → Ansible Vault → `.env` files
-- SSL certificates via Let's Encrypt (automatic renewal)
-- SASL/SCRAM authentication for Redpanda
-
-See [infrastructure/README.md](infrastructure/README.md) for details.
-
-## 🧪 Testing
+## Testing
 
 ```bash
-# Run all tests
-make test
+# Unit tests across all workspace packages
+pnpm test
 
-# Test specific service
-./mvnw -pl services/user-service test
+# E2E tests
+pnpm test:e2e
 
-# Ansible role testing (Molecule)
+# Ansible role tests (Molecule)
 make test-ansible
 ```
 
-## 📦 Adding a New Microservice
+## Adding a New Microservice
 
-1. Create `services/your-service/` with Spring Boot structure
-2. Add module to root `pom.xml`
-3. Create `services/your-service/Dockerfile`
-4. Add service to `docker-compose.yml`
-5. Create `.env.your-service.example`
-6. CI/CD workflows auto-detect changes and build new service
+1. Generate the app: `nest generate app your-service`
+2. Add a service definition to `docker-compose.yml` following the `user-service` example
+3. Create `apps/your-service/.env` (based on `.env.infra.example` pattern)
+4. Add the path to `dorny/paths-filter` in the CI workflow so incremental builds detect it
+5. Add database users to `config/postgres/init-users.conf` if needed
 
-See existing services in `services/` directory for reference implementation examples.
+## Troubleshooting
 
-## 🚨 Troubleshooting
-
-**Services won't start:**
+Services won't start:
 
 ```bash
 make check-services
 make logs SERVICE=user-service
 ```
 
-**Database connection issues:**
+Database connection issues:
 
 ```bash
 make exec-postgres
+# inside psql: \l to list databases, \du to list users
 ```
 
-Inside PostgreSQL shell, list databases with `\l` command.
-
-**Port conflicts:**
+Port conflicts:
 
 ```bash
 make down
 make clean
 make up
 ```
-
-## 📄 License
-
-See [LICENSE](LICENSE) file for details.
-
----
-
-**Need help?** Check [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system overview or [docs/MAKEFILE.md](docs/MAKEFILE.md) for command reference.

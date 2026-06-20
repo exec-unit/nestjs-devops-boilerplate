@@ -1,64 +1,61 @@
 # ADR-005: Ansible for Deployment Automation
 
 **Date:** 2025-12-19
-**Status:** Accepted  
+**Status:** Accepted
 **Deciders:** Project Lead
 
 ## Context
 
-OpenMeal requires deployment automation to manage multiple environments (shared-dev, stage, prod). The deployment process involves:
+Deployment automation is required to manage multiple environments (shared-dev, stage, prod). The deployment process involves:
 
 - Synchronizing configuration files from Git to target servers
 - Generating environment-specific `.env` files from secrets
-- Pulling Docker images from registry
+- Pulling Docker images from the container registry
 - Starting services via Docker Compose
 - Managing SSL certificates
 - Configuring backups
 
-**Automation Options:**
+Automation options:
 
-1. **Bash Scripts** - Simple shell scripts for deployment
-2. **Ansible** - Configuration management and automation
-3. **Terraform** - Infrastructure as code
-4. **Custom CI/CD Scripts** - GitHub Actions only
+1. Bash Scripts - simple shell scripts for deployment
+2. Ansible - configuration management and automation
+3. Terraform - infrastructure as code
+4. Custom CI/CD Scripts - GitHub Actions only
 
 ## Decision
 
-Use **Ansible** for deployment automation.
+Use Ansible for deployment automation.
 
 ## Rationale
 
 ### Why Ansible for This Project
 
-**Idempotent Operations:**
+Idempotent Operations:
 
 - Run playbook multiple times, same result
 - Safe to re-run on failures
 - No "already exists" errors to handle manually
-- Demonstrates understanding of infrastructure automation
 
-**Declarative Configuration:**
+Declarative Configuration:
 
 - Playbooks describe desired state, not steps
 - Easy to read and understand deployment process
 - Self-documenting: playbook IS the documentation
-- Shows infrastructure-as-code practices
 
-**Secrets Management:**
+Secrets Management:
 
 - Built-in Ansible Vault for encrypting secrets
 - Variables can be environment-specific
-- Clean separation: vault.yml (secrets) + all.yml (config)
-- Demonstrates security best practices
+- Clean separation: `vault.yml` (secrets) + `all.yml` (config)
 
-**Selective File Synchronization:**
+Selective File Synchronization:
 
 - Rsync module syncs only necessary files to target
 - Source code stays on CI/CD server, not on production
 - Efficient: only changed files transferred
 - Implements "Git as single source of truth" pattern
 
-**Operational Benefits:**
+Operational Benefits:
 
 - Declarative approach reduces cognitive load
 - Playbooks serve as executable documentation
@@ -67,14 +64,14 @@ Use **Ansible** for deployment automation.
 
 ### Why Not Bash Scripts
 
-**Complexity:**
+Complexity:
 
 - Would need to handle idempotency manually
 - Error handling becomes messy
 - No built-in secrets management
 - Hard to maintain as project grows
 
-**Example of bash complexity:**
+Example of bash complexity:
 
 ```bash
 # Check if user exists, create if not
@@ -83,44 +80,46 @@ if ! docker exec postgres psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE ro
 fi
 ```
 
-**Ansible equivalent:**
+Ansible equivalent:
 
 ```yaml
 - name: Create database user
   postgresql_user:
     name: user_service
-    password: "{{ vault_user_service_db_password }}"
+    password: '{{ vault_user_service_db_password }}'
     state: present
 ```
 
+Multiplied across users, databases, SSL certificates, firewall rules, and service configurations, the bash approach becomes unmaintainable.
+
 ### Why Not Terraform
 
-**Wrong Tool:**
+Wrong Tool:
 
 - Terraform manages infrastructure (VMs, networks, cloud resources)
 - We need application deployment automation
-- Our VDS instances are manually provisioned
+- VDS instances are manually provisioned outside CI/CD
 - Terraform would be overkill for Docker Compose deployment
 
-**Could Use Both:**
+Could Use Both:
 
-- Terraform for VDS provisioning (not needed for pet project)
-- Ansible for application deployment (what we actually need)
+- Terraform for VDS provisioning (not needed at current scale)
+- Ansible for application deployment and configuration management
 
 ### Why Not Custom CI/CD Scripts
 
-**Reinventing the Wheel:**
+Reinventing the Wheel:
 
 - Would need to implement file sync, templating, secrets
-- Ansible provides all this out of the box
+- Ansible provides all of this out of the box
 - More code to maintain
-- Less recognizable to employers
+- Ansible roles are well-understood by other engineers
 
 ## Implementation
 
 ### Playbook Structure
 
-**deploy.yml** - Full deployment (initial setup):
+`playbooks/deploy.yml` - full deployment (initial setup):
 
 ```yaml
 - hosts: all
@@ -132,12 +131,12 @@ fi
     # Firewall, hardening
     - security
     # Application deployment
-    - openmeal-deploy
+    - nestjs_deploy
     # Backup automation
     - backup
 ```
 
-**release.yml** - Incremental release (CI/CD):
+`playbooks/release.yml` - incremental release (CI/CD):
 
 ```yaml
 - hosts: all
@@ -153,10 +152,10 @@ fi
 ```
 inventories/
 ├── stage/
-│   ├── hosts.yml       # Server IPs
+│   ├── hosts.yml         # Server IPs
 │   └── group_vars/
-│       ├── all.yml     # deployment_type, domains, versions
-│       └── vault.yml   # Encrypted secrets (generated)
+│       ├── all.yml       # deployment_type, domains, versions
+│       └── vault.yml     # Encrypted secrets (generated)
 └── prod/
 ```
 
@@ -164,76 +163,66 @@ inventories/
 
 ```
 GitHub Secrets (INFRA_ENV, SERVICES_ENV)
-    ↓
+    |
 generate-vault.py
-    ↓
+    |
 vault.yml (vault_postgres_password, vault_services_env, etc.)
-    ↓
+    |
 Ansible reads vault_* variables
-    ↓
+    |
 generate-configs.yml task
-    ↓
+    |
 .env.infra on target server
 ```
 
 ### Secrets Management
 
-**Local Development:**
+Local Development:
 
 - Manually create `vault.yml` with dev secrets
-- Or use `.env.infra` directly (simpler)
+- Or use `.env.infra` directly (simpler for local work)
 
-**CI/CD:**
+CI/CD:
 
-- GitHub Secrets → `generate-vault.py` → `vault.yml`
+- GitHub Secrets -> `generate-vault.py` -> `vault.yml`
 - Ansible reads `vault.yml` automatically
-- Never committed to Git
+- `vault.yml` is never committed to Git
 
 ## Consequences
 
 ### Positive
 
-✅ **Idempotency:**
+Idempotency:
 
 - Safe to re-run deployments
 - Handles failures gracefully
 
-✅ **Readability:**
+Readability:
 
 - Playbooks are self-documenting
 - Easy to understand deployment process
 
-✅ **Secrets Management:**
+Secrets Management:
 
 - Ansible Vault encrypts sensitive data
 - Clean separation of config and secrets
 
-✅ **Efficiency:**
+Efficiency:
 
 - Only changed files synchronized
-- Parallel execution across hosts (if needed)
-
-✅ **Industry Standard:**
-
-- Recognized skill by employers
-- Large community and documentation
+- Parallel execution across hosts if needed
 
 ### Negative
 
-⚠️ **Learning Curve:**
+Python Dependency:
 
-- Need to learn Ansible syntax and modules
-- _Acceptable:_ Good learning investment
+- Requires Python 3.13+ on the CI/CD runner
+- Not an issue: Python is standard on CI/CD platforms
 
-⚠️ **Python Dependency:**
+Overhead:
 
-- Requires Python 3.13+ on control machine (CI/CD server)
-- _Not an issue:_ Python is standard on CI/CD
-
-⚠️ **Overhead:**
-
-- More complex than bash for simple tasks
-- _Acceptable:_ Benefits outweigh complexity
+- More verbose than bash for simple one-off tasks
+- Benefits outweigh this for multi-step deployments
 
 ## Real-World Usage
 
@@ -246,44 +235,42 @@ ansible-playbook -i inventories/stage playbooks/deploy.yml
 
 ### CI/CD Deployment
 
-GitHub Actions workflow:
-
 ```yaml
 - name: Run Ansible Playbook
   run: |
     cd infrastructure/ansible
     ansible-playbook -i inventories/stage playbooks/release.yml \
       -e "release_map=${{ needs.prepare-release.outputs.release_map }}" \
-      -e "registry_id=${{ secrets.YC_REGISTRY_ID }}"
+      -e "registry_id=your-github-username"
 ```
 
 ### Deployment Flow
 
-1. **CI/CD server** clones Git repository
-2. **generate-vault.py** creates `vault.yml` from GitHub Secrets
-3. **Ansible** runs on CI/CD server (not on target)
-4. **Rsync** syncs files from repo to target server
-5. **Templates** generate `.env.infra` on target
-6. **Docker Compose** pulls images and starts services
+1. CI/CD server clones Git repository
+2. `generate-vault.py` creates `vault.yml` from GitHub Secrets
+3. Ansible runs on CI/CD server (not on target)
+4. Rsync syncs files from repo to target server
+5. Templates generate `.env.infra` on target
+6. Docker Compose pulls images and starts services
 
 ## Evolution Path
 
 ### Triggers for Alternative Approaches
 
-**GitOps (ArgoCD/Flux):**
+GitOps (ArgoCD/Flux):
 
 - Migration to Kubernetes
 - Need for declarative, pull-based deployments
 - Multiple teams requiring self-service deployments
 - Drift detection and automatic reconciliation requirements
 
-**Terraform:**
+Terraform:
 
 - Need to manage cloud infrastructure (VMs, networks, load balancers)
 - Multi-cloud deployment requirements
 - Infrastructure state management becomes critical
 
-**Custom Orchestration:**
+Custom Orchestration:
 
 - Deployment complexity exceeds Ansible capabilities
 - Need for complex workflow orchestration
@@ -291,22 +278,22 @@ GitHub Actions workflow:
 
 ### Migration Strategy
 
-**To GitOps:**
+To GitOps:
 
 1. Migrate to Kubernetes (see ADR-003)
-2. Convert Ansible roles to Helm charts or Kustomize
+2. Convert Ansible roles to Helm charts or Kustomize overlays
 3. Deploy ArgoCD/Flux to cluster
 4. Configure Git repository as source of truth
 5. Transition from push-based to pull-based deployments
 
-**To Terraform + Ansible:**
+To Terraform + Ansible:
 
 1. Extract infrastructure provisioning to Terraform
 2. Keep Ansible for application deployment and configuration
 3. Use Terraform outputs as Ansible inventory
 4. Maintain separation of concerns
 
-**Estimated effort:** 3-5 days for GitOps migration after Kubernetes adoption
+Estimated effort: 3-5 days for GitOps migration after Kubernetes adoption
 
 ## Related Decisions
 

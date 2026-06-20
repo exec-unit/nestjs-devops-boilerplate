@@ -1,462 +1,253 @@
 # Architecture Overview
 
-> **⚠️ Documentation Status:** This document describes the **target architecture** for the complete OpenMeal platform. The system is currently under active development. See [README.md](../README.md#implementation-status) for current implementation status of individual microservices.
+## Table of Contents
 
-This document provides a high-level overview of the OpenMeal platform architecture, deployment model, and key technical decisions.
-
-## Business Context
-
-**OpenMeal** is a food ordering and delivery platform that connects:
-
-- **Customers** - Browse restaurants, place orders, track delivery in real-time
-- **Restaurants (Partners)** - Manage menus, process orders, update preparation status
-- **Couriers** - Receive delivery assignments, navigate to pickup/dropoff locations
-- **Support Agents** - Handle incidents, process refunds, manage escalations
-- **Administrators** - Verify restaurants, handle escalated cases, analyze operations
-
-### Core Business Flows
-
-1. **Order Lifecycle**: Customer places order → Restaurant prepares → Courier delivers
-2. **Courier Assignment**: Automated algorithm selects nearest available courier based on proximity and workload
-3. **Real-time Tracking**: Customer sees courier location during delivery
-4. **Incident Management**: Support handles issues with escalation to administrators for complex cases
-5. **Restaurant Onboarding**: Verification workflow before activation on platform
-
-## System Context
-
-<img src="assets/architecture_diagram.webp" width="600">
+- [Deployment Model](#deployment-model)
+- [Secrets to Runtime Flow](#secrets-to-runtime-flow)
+- [Application Structure](#application-structure)
+- [Data Storage Strategy](#data-storage-strategy)
+- [Build and Deployment Pipeline](#build-and-deployment-pipeline)
+- [Security](#security)
+- [Monitoring and Observability](#monitoring-and-observability)
 
 ## Deployment Model
 
 ### Four-Environment Strategy
 
-The platform uses Docker Compose **profiles** to activate different service sets per environment:
+Docker Compose profiles activate different service sets per environment. The `ENVIRONMENT` variable in `.env.infra` drives `make up`, which selects the correct profile combination.
 
-| Environment    | ENVIRONMENT Value | Docker Profile | Services                             | Purpose                            |
-| -------------- | ----------------- | -------------- | ------------------------------------ | ---------------------------------- |
-| **Local Dev**  | `local-dev`       | `local-dev`    | Postgres, MongoDB, Redis, MinIO      | Developer laptop (minimal CPU/RAM) |
-| **Shared Dev** | `shared-dev`      | `shared-dev`   | + Keycloak, Redpanda, Nginx, Certbot | Shared VDS for team                |
-| **Staging**    | `stage`           | `stage`        | Full stack (no MinIO, uses cloud S3) | Pre-production testing             |
-| **Production** | `prod`            | `prod`         | Full + Prometheus/Grafana            | Production deployment              |
+| Environment | ENVIRONMENT Value | Docker Profiles Activated | Services                             | Purpose                 |
+| ----------- | ----------------- | ------------------------- | ------------------------------------ | ----------------------- |
+| Local Dev   | `local-dev`       | `local-dev`               | Postgres, MongoDB, Redis, MinIO      | Developer laptop        |
+| Shared Dev  | `shared-dev`      | `shared-dev`              | + Keycloak, Redpanda, Nginx, Certbot | Shared VDS for the team |
+| Staging     | `stage`           | `stage`                   | Full stack (no MinIO, uses cloud S3) | Pre-production testing  |
+| Production  | `prod`            | `prod` + `monitoring`     | Full stack + Prometheus/Grafana      | Production deployment   |
 
-**Key Design Decision:** Keycloak runs only on `shared-dev`/`stage`/`prod` because it's resource-heavy. Local developers connect to shared Keycloak instance.
+Note that profile names do not always match environment names. Production activates two profiles (`prod` and `monitoring`) because the monitoring stack is defined in a separate compose file and activated independently.
+
+In `infra.yml`, services declare which profiles they belong to:
+
+```yaml
+postgres:
+  profiles: ['infra', 'local-dev', 'shared-dev', 'stage', 'prod']
+
+redpanda:
+  profiles: ['infra', 'shared-dev', 'stage', 'prod']
+
+minio:
+  profiles: ['infra', 'local-dev']
+```
+
+The `infra` profile is used for manual testing without a full environment. MongoDB is absent from `shared-dev` because the shared VDS runs Keycloak and Redpanda (both resource-heavy); each developer runs MongoDB locally.
+
+Keycloak and Redpanda do not run on `local-dev`. Local developers connect to the `shared-dev` instance:
+
+- Keycloak: shared OAuth2/OIDC provider at a fixed domain
+- Redpanda: shared event bus, accessible on port 19092 (SASL/SCRAM authenticated)
 
 ### Profile Activation Logic
 
-Defined in `makefiles/docker.mk`:
+Defined in `makefiles/docker.mk`. The `make up` target reads `ENVIRONMENT` from `.env.infra` and passes the appropriate profile flags:
 
 ```makefile
-# local-dev: minimal infrastructure
-COMPOSE_FILES = -f docker-compose.yml -f compose/infra.yml
-PROFILES = --profile local-dev
+# local-dev
+docker compose -f docker-compose.yml -f compose/infra.yml --profile local-dev up -d
 
-# shared-dev: adds Keycloak, Redpanda, Nginx
-COMPOSE_FILES = -f docker-compose.yml -f compose/infra.yml
-PROFILES = --profile shared-dev
+# shared-dev
+docker compose -f docker-compose.yml -f compose/infra.yml --profile shared-dev up -d
 
-# stage/prod: full stack + monitoring
-COMPOSE_FILES = -f docker-compose.yml -f compose/infra.yml -f compose/monitoring.yml
-PROFILES = --profile stage --profile monitoring
+# stage
+docker compose -f docker-compose.yml -f compose/infra.yml --profile stage up -d
+
+# prod
+docker compose -f docker-compose.yml -f compose/infra.yml -f compose/monitoring.yml \
+  --profile prod --profile monitoring up -d
 ```
 
-## Variable Flow: Secrets → Runtime
+## Secrets to Runtime Flow
 
-Understanding how configuration flows from GitHub Secrets to running containers:
+GitHub Secrets contain multiline `KEY=VALUE` blocks per environment (`INFRA_ENV`, `SERVICE_NAME_ENV`). The pipeline converts them to files on the target server without any plaintext values ever touching Git.
 
-```mermaid
-graph LR
-    A[GitHub Secrets] -->|CI/CD| B[generate-vault.py]
-    B -->|Creates| C[vault.yml]
-    C -->|Ansible reads| D[generate-configs.yml]
-    D -->|Generates| E[.env.infra]
-    D -->|Generates| F[.env.service-name]
-    E -->|Docker Compose| G[Infrastructure Containers]
-    F -->|Docker Compose| H[Microservice Containers]
+1. GitHub Actions runs `generate-vault.py`, which reads the secrets and writes `vault.yml` with all variables prefixed as `vault_*`. PyYAML handles escaping to prevent injection.
 
-    style A fill:#ffccff,stroke:#333,color:#000
-    style C fill:#ffffcc,stroke:#333,color:#000
-    style E fill:#ccffcc,stroke:#333,color:#000
-    style F fill:#ccffcc,stroke:#333,color:#000
+2. Ansible playbook `generate-configs.yml` copies `.env.infra.example` to `.env.infra` on the target server and substitutes each `vault_*` variable into its placeholder.
+
+3. Ansible playbook `generate-service-envs.yml` discovers services from `docker-compose.yml` and creates per-service `.env.service-name` files by extracting the relevant prefix from `vault_services_env`.
+
+4. Docker Compose reads `.env.infra` for infrastructure variables and `apps/service-name/.env` for each microservice. The `ENVIRONMENT` variable drives profile selection.
+
+5. At container startup, init scripts run inside containers and perform the actual resource creation. PostgreSQL's `init-db.sh` reads `init-users.conf` to create users and databases; MinIO's `init-buckets.sh` creates S3 buckets; Redpanda's `bootstrap-user.sh` creates the SASL superuser.
+
+`vault.yml` is never committed - it is generated at CI/CD time and exists only in the GitHub Actions runner's working directory.
+
+## Application Structure
+
+### Monorepo Layout
+
+```
+apps/
+├── user-service/
+│   ├── src/
+│   │   ├── main.ts
+│   │   ├── app.module.ts
+│   │   └── user/
+│   ├── test/
+│   ├── package.json
+│   └── tsconfig.json
+libs/
+└── (shared TypeScript packages)
 ```
 
-### Step-by-Step Flow
+Each `apps/*` directory is an independent `pnpm` workspace package and maps to one Docker container. Each `libs/*` package is consumed by services via `workspace:*` in `package.json` without publishing to npm.
 
-1. **GitHub Secrets (per environment)**
-   - `INFRA_ENV` - multiline KEY=VALUE for infrastructure passwords
-   - `<SERVICE_NAME>_ENV` - per-service environment variables (e.g., `USER_SERVICE_ENV`, `ORDER_SERVICE_ENV`)
-   - `SERVICES_ENV` - consolidated service variables (optional, for shared configuration)
-   - `YC_REGISTRY_USERNAME`, `YC_REGISTRY_PASSWORD` - Docker registry auth
+The root `package.json` holds all shared dev tooling: ESLint, Prettier, Jest, SWC, `commitlint`, `husky`. Service-level `package.json` files hold only runtime dependencies specific to that service.
 
-2. **CI/CD: generate-vault.py**
-   - Parses `SECRETS_JSON` from GitHub Actions
-   - Creates `vault.yml` with `vault_*` prefixed variables
-   - Uses PyYAML for safe escaping (prevents shell injection)
+### Build Process
 
-3. **Ansible: generate-configs.yml**
-   - Copies `.env.infra.example` → `.env.infra`
-   - Replaces placeholders with `vault_*` values via regex
-   - Overrides deployment-specific vars (ENVIRONMENT, domains, versions)
+Development (watch mode):
 
-4. **Ansible: generate-service-envs.yml**
-   - Discovers services from `docker-compose.yml`
-   - Extracts `SERVICE_PREFIX_*` from `vault_services_env`
-   - Merges with `vault_service_name_env` (per-service takes priority)
-   - Creates `.env.service-name` files
+```bash
+pnpm dev:build
+pnpm start:dev
+```
 
-5. **Docker Compose Startup**
-   - Reads `.env.infra` for infrastructure variables
-   - Reads `.env.{service}` for each microservice
-   - Activates profiles based on `ENVIRONMENT`
-   - Pulls images from Yandex Container Registry
-   - Starts containers with healthchecks
+`dev:build` runs `swc apps libs -d dist -w`. `start:dev` starts all services in parallel via `pnpm -r --parallel run start:dev`, where each service runs `nest start --watch` pointing at the compiled `dist/`.
 
-6. **Runtime Initialization**
-   - **PostgreSQL**: `init-db.sh` creates users from `init-users.conf` (all environments)
-   - **MongoDB**: `init-db.sh` creates users/databases (all environments)
-   - **Redpanda**: `bootstrap-user.sh` configures SASL/SCRAM auth (shared-dev, stage, prod)
-   - **MinIO**: `init-buckets.sh` creates S3 buckets (local-dev only)
-   - **Nginx**: `envsubst` generates config from template (shared-dev, stage, prod)
+Production - a single `Dockerfile` parameterized by `APP_NAME`:
 
-### Environment-Aware Database Configuration
+```dockerfile
+FROM node:22-alpine AS builder
+ARG APP_NAME
+WORKDIR /app
+COPY . .
+RUN pnpm install && pnpm build
+# Isolate the monorepo service and its production dependencies
+RUN pnpm deploy --filter=${APP_NAME} --prod /out
+RUN cp -r dist/apps/${APP_NAME}/src /out/dist
 
-The `prepare-db-configs.sh` script modifies `config/postgres/init-users.conf` based on environment:
+FROM node:22-alpine AS runner
+# Only the specific service and its dependencies are included
+COPY --from=builder /out ./
+CMD ["node", "dist/main.js"]
+```
 
-- **local-dev**: Comments out Keycloak user (uses shared-dev Keycloak)
-- **shared-dev**: Only Keycloak user active
-- **stage/prod**: All users active
+Used in `docker-compose.yml`:
 
-This prevents resource waste and ensures proper service isolation.
-
-## Microservices Architecture
-
-### API Gateway
-
-- **Responsibility:** Request routing and cross-cutting concerns
-- **Functions:** Authentication, rate limiting, request/response transformation, circuit breaking
-- **Cache:** Redis (rate limiting, session validation)
-- **Pattern:** Single entry point for all client requests
-
-### Microservices Overview
-
-**1. Auth Service**
-
-- **Responsibility:** Authentication and session management
-- **Functions:** Login, registration (phone/social), JWT token issuance/refresh/revocation
-- **Database:** PostgreSQL (user credentials, sessions)
-- **Cache:** Redis (active sessions, refresh tokens)
-- **Events Published:** `user.authenticated`, `user.logged_out`
-
-**2. User Service**
-
-- **Responsibility:** User profile management
-- **Functions:** Profiles for customers/couriers/partners, addresses, payment methods, verification status
-- **Database:** PostgreSQL (user_profiles, addresses, payment_methods)
-- **Events Published:** `user.profile.updated`, `user.address.added`
-- **Events Consumed:** `user.authenticated` (create profile)
-
-**3. Restaurant Service**
-
-- **Responsibility:** Restaurant and menu management
-- **Functions:** Restaurant profiles, menus (dishes, prices, categories), schedules, operational status
-- **Database:** PostgreSQL (restaurants, menu_items), MongoDB (reviews, ratings)
-- **Storage:** S3 (dish images, restaurant photos)
-- **Events Published:** `restaurant.verified`, `menu.updated`, `restaurant.status.changed`
-
-**4. Order Service**
-
-- **Responsibility:** Order lifecycle management
-- **Functions:** Cart creation, order placement, status tracking (Created → Confirmed → Preparing → Ready → Picked Up → Delivered)
-- **Database:** PostgreSQL (orders, order_items, order_status_history)
-- **Events Published:** `order.created`, `order.confirmed`, `order.ready`, `order.picked_up`, `order.delivered`, `order.cancelled`
-- **Events Consumed:** `payment.confirmed`, `restaurant.order.accepted`
-
-**5. Payment Service**
-
-- **Responsibility:** Payment processing and refunds
-- **Functions:** ЮKassa integration, transaction initiation, refund processing
-- **Database:** PostgreSQL (transactions, refunds)
-- **External:** ЮKassa payment gateway
-- **Events Published:** `payment.confirmed`, `payment.failed`, `refund.processed`
-- **Events Consumed:** `order.created`, `support.refund.requested`
-
-**6. Dispatch Service**
-
-- **Responsibility:** Courier assignment algorithm
-- **Functions:** Find nearest available courier, calculate ETA, assign delivery task
-- **Database:** PostgreSQL (courier_assignments, delivery_tasks)
-- **Algorithm:** Proximity-based with workload balancing
-- **Events Published:** `courier.assigned`, `delivery.task.created`
-- **Events Consumed:** `order.ready`, `courier.available`
-
-**7. Tracking Service**
-
-- **Responsibility:** Real-time courier location tracking
-- **Functions:** Collect GPS coordinates, provide location stream to customers
-- **Database:** MongoDB (location_history - high write throughput)
-- **Cache:** Redis (current courier locations)
-- **Events Published:** `courier.location.updated`, `courier.arrived.restaurant`, `courier.arrived.customer`
-- **Events Consumed:** `courier.assigned`
-
-**8. File Service**
-
-- **Responsibility:** File storage and metadata management
-- **Functions:** Upload/download files, image processing, file metadata tracking
-- **Database:** MongoDB (file metadata, upload history)
-- **Storage:** S3-compatible storage (MinIO local, S3 production)
-- **Events Published:** `file.uploaded`, `file.deleted`
-- **Use Cases:** Restaurant photos, dish images, user avatars, receipt documents
-
-**9. External Sender Service**
-
-- **Responsibility:** External notifications
-- **Functions:** Push notifications, SMS, email delivery
-- **External:** Firebase (Push), SMS gateway, Email service
-- **Events Consumed:** All major events (`order.*`, `courier.*`, `payment.*`)
-- **Pattern:** Event-driven notification dispatcher
-
-**10. Support Service**
-
-- **Responsibility:** Customer support and incident management
-- **Functions:** Ticket creation, refund initiation, temporary account blocking, escalation to admins
-- **Database:** PostgreSQL (support_tickets, actions_log)
-- **Events Published:** `support.ticket.created`, `support.refund.requested`, `support.escalated`
-- **Events Consumed:** `order.*` (for context)
-
-**11. Admin Service**
-
-- **Responsibility:** Platform administration
-- **Functions:** Restaurant verification, permanent account actions, escalated incident resolution
-- **Database:** PostgreSQL (verification_requests, admin_actions)
-- **Events Published:** `admin.restaurant.verified`, `admin.account.blocked`
-- **Events Consumed:** `support.escalated`, `restaurant.verification.requested`
-
-**12. Report Service**
-
-- **Responsibility:** Analytics and reporting
-- **Functions:** Data aggregation, dashboard generation, operational metrics
-- **Database:** MongoDB (aggregated_data, reports)
-- **Pattern:** Read-only replica or event sourcing from other services
-- **Outputs:** Admin dashboards, partner analytics
+```yaml
+build:
+  context: .
+  dockerfile: Dockerfile
+  args:
+    APP_NAME: user-service
+```
 
 ### Communication Patterns
 
-**Synchronous (REST API):**
+Synchronous (HTTP):
 
 ```
-Customer → API Gateway → Order Service → Restaurant Service (menu validation)
-                      → Payment Service (immediate payment)
+Client -> Nginx -> NestJS Service -> another NestJS Service (HTTP)
 ```
 
-**Asynchronous (Event-Driven):**
+Asynchronous (event-driven via Redpanda):
 
 ```
-Order Service: order.created
-    ↓
-Payment Service: payment.confirmed
-    ↓
-Dispatch Service: courier.assigned
-    ↓
-Tracking Service: courier.location.updated
-    ↓
-External Sender: notification.sent
+Service A publishes event -> Redpanda topic -> Service B subscribes
 ```
 
-**Key Events:**
+`@nestjs/microservices` with the Kafka transport connects to Redpanda. The Kafka transport is API-compatible with Redpanda; no code changes are needed if migrating to Apache Kafka.
 
-- `order.*` - Order lifecycle (created, confirmed, ready, delivered, cancelled)
-- `payment.*` - Payment status (confirmed, failed, refunded)
-- `courier.*` - Courier actions (assigned, location.updated, arrived)
-- `restaurant.*` - Restaurant changes (verified, menu.updated, status.changed)
-- `user.*` - User actions (authenticated, profile.updated)
+## Data Storage Strategy
 
-### Data Storage Strategy
+| Storage    | Use Cases                                                      |
+| ---------- | -------------------------------------------------------------- |
+| PostgreSQL | Transactional data: business entities, structured records      |
+| MongoDB    | High write throughput, flexible schema: logs, events, metadata |
+| Redis      | Caching, rate limiting, BullMQ job queues, session storage     |
 
-**PostgreSQL:** Orders, Payments, Users, Restaurants (transactional data), Courier Assignments, Support Tickets, Admin Actions
+All storage is behind service-level abstractions. Each microservice owns its own database (database-per-service pattern). Cross-service data access goes through events or HTTP, not shared databases.
 
-**MongoDB:** Location Tracking (high write throughput), Event Logs, Reviews/Ratings, Audit Logs
+## Build and Deployment Pipeline
 
-**Redis:**
+### CI/CD Overview
 
-- OTP codes (Auth Service)
-- Current courier locations (Tracking Service)
-- Restaurant availability cache (Restaurant Service)
-- Rate limiting (API Gateway)
+Staging (push to `main`):
 
-**Why This Architecture?**
+- `dorny/paths-filter` detects which `apps/` directories changed. Only changed services are built.
+- Each Docker image is scanned with Trivy. CRITICAL and HIGH vulnerabilities fail the pipeline.
+- Images are tagged `sha-{commit_hash}` and pushed to the container registry.
+- Ansible deploys to the staging server automatically.
 
-- **PostgreSQL:** ACID compliance for financial transactions and structured business data
-- **MongoDB:** High write throughput for location tracking, flexible schema for weakly structured data (file metadata, reviews), evolving data models
-- **Redis:** Sub-millisecond reads for real-time features and caching
-- **Per-service databases:** Data isolation and independent scaling
+Production (Git tag `v*`):
 
-## Build & Deployment Pipeline
+- Identical build process to staging.
+- Images tagged `v{major}.{minor}.{patch}`.
+- Ansible deployment requires manual approval (GitHub environment protection).
 
-### Local Development
+### Ansible Deployment Process
 
-```bash
-# Initialize configs
-make init
-# Start services (ENVIRONMENT=local-dev)
-make up
-# Maven build
-make build
-# Run tests
-make test
-```
+1. Pre-flight checks: RAM >= 1GB, vCPU >= 1, Disk >= 5GB, DNS resolution valid, ports 80/443 available
+2. Infrastructure setup: Docker installation, UFW firewall, SSL certificates via Certbot
+3. File sync: rsync from CI/CD runner to target server (`compose/`, `config/`, `scripts/`, `makefiles/`, `Makefile`, `docker-compose.yml`, `.env.infra.example`)
+4. Configuration generation: vault variables substituted into `.env.infra` and per-service `.env` files
+5. `docker compose pull` for updated images
+6. `docker compose up -d`
+7. Health verification via `scripts/check-services.sh`
 
-### CI/CD Pipeline (GitHub Actions)
+Source code (`apps/`, `libs/`) is never synced to the server - only compiled Docker images are pulled from the registry.
 
-```mermaid
-graph TB
-    A[Developer Push] --> B{Branch?}
+## Security
 
-    B -->|main branch| C1[Staging Pipeline]
-    B -->|Git tag| C2[Production Pipeline]
+Authentication and authorization:
 
-    C1 --> D1[prepare-release<br/>version: sha-abc123]
-    C2 --> D2[prepare-release<br/>version: v1.2.3]
+- Keycloak as centralized OAuth2/OIDC identity provider
+- JWT tokens for service-to-service authentication
+- RBAC via Keycloak roles and realm configuration
 
-    D1 --> E1[build-images<br/>Changed services only]
-    D2 --> E2[build-images<br/>Changed services only]
+Secrets management:
 
-    E1 --> F1[Push to Registry<br/>tag: sha-abc123]
-    E2 --> F2[Push to Registry<br/>tag: v1.2.3]
+- `.env.infra`, `vault.yml`, and `config/*/init-users.conf` are never committed
+- All sensitive files get `0600` permissions on target servers set by Ansible
 
-    F1 --> G1[deploy-ansible<br/>inventories/stage]
-    F2 --> G2[deploy-ansible<br/>inventories/prod]
+Network:
 
-    G1 --> H1[Staging Server<br/>Auto-deploy]
-    G2 --> H2[Production Server<br/>Manual approval]
+- Only ports 80 and 443 are exposed externally; UFW blocks everything else
+- Database and service ports are bound to `127.0.0.1` only
+- Docker internal network (`boilerplate_net`) for service-to-service communication
+- Let's Encrypt SSL with automatic renewal via Certbot
 
-    H1 --> I1[Health Check]
-    H2 --> I1[Health Check]
+Container:
 
-    I1 --> J1[Tag as :latest]
-```
+- Trivy scans in CI (CRITICAL/HIGH block deployment)
+- Non-root users in all containers
+- Docker Compose health checks ensure dependencies are ready before dependents start
 
-**Pipeline Differences:**
+## Monitoring and Observability
 
-**Staging (main branch):**
+Metrics (production only):
 
-- Automatic deployment on every push
-- Version: `sha-{commit_hash}`
-- Fast feedback loop for development
+- Prometheus scrapes `/metrics` from all NestJS services (`prom-client` + `@willsoto/nestjs-prometheus`)
+- Grafana with pre-configured dashboards via provisioning
+- 7 days metric retention
 
-**Production (Git tag):**
+Health checks:
 
-- Manual trigger via Git tag creation
-- Version: `v{major}.{minor}.{patch}`
-- Requires explicit release decision
+- `@nestjs/terminus` exposes `/health` in each service
+- Docker Compose `healthcheck` defined for every infrastructure container
+- `scripts/check-services.sh` for manual status verification
 
-**Shared Features:**
+Logging:
 
-- Incremental builds (only changed services)
-- Atomic releases via Ansible
-- Health checks before marking success
-- Previous images retained for rollback
-
-### Deployment Process (Ansible)
-
-1. **Pre-flight Checks**
-   - System resources (RAM ≥1GB, vCPU ≥1, Disk ≥5GB)
-   - DNS validation (for SSL environments)
-   - Port availability (80, 443)
-
-2. **Infrastructure Setup**
-   - Docker installation
-   - Security hardening (firewall, unattended-upgrades)
-   - SSL certificates (Let's Encrypt)
-
-3. **Application Deployment**
-   - File synchronization (rsync)
-   - Configuration generation (vault → .env)
-   - Image pull from registry
-   - Service startup via `docker compose up -d`
-   - Old image cleanup
-
-4. **Post-Deployment**
-   - Health checks via `check-services.sh`
-   - Service status verification
-   - Deployment summary
-
-## Security Architecture
-
-### Authentication & Authorization
-
-- **Keycloak**: Centralized identity provider (OAuth2/OIDC)
-- **JWT Tokens**: Stateless authentication between services
-- **RBAC**: Role-based access control
-
-### Secrets Management
-
-- **Never committed**: `.env.infra`, `vault.yml`, `init-users.conf`
-- **GitHub Secrets** → **Ansible Vault** → **Environment Files**
-- **File permissions**: `0600` for all sensitive files
-
-### Network Security
-
-- **SSL/TLS**: Let's Encrypt certificates with auto-renewal
-- **HSTS**: Strict-Transport-Security headers
-- **Firewall**: Only ports 80/443 exposed to internet
-- **Docker Networks**: Service isolation via internal networks
-
-### Container Security
-
-- **Distroless Images**: Minimal attack surface (no shell, no package manager)
-- **Non-root Users**: All containers run as unprivileged users
-- **Health Checks**: Automatic restart on failure
-- **SASL/SCRAM**: Redpanda authentication
-
-## Monitoring & Observability
-
-### Metrics (Production Only)
-
-- **Prometheus**: Scrapes `/actuator/metrics` from all services
-- **Grafana**: Pre-configured dashboards via provisioning
-- **Retention**: 7 days of metrics data
-
-### Health Checks
-
-- **Docker Health Checks**: Built into all service definitions
-- **Spring Actuator**: `/actuator/health` endpoints
-- **Custom Script**: `scripts/check-services.sh` for manual verification
-
-### Logging
-
-- **Docker Logs**: `docker compose logs -f`
-- **Log Levels**: Configurable via environment variables
-- **Future**: Centralized logging (ELK/Loki) planned
-
-## Scalability Considerations
-
-### Current State (Monolith-First Approach)
-
-- Single-instance deployment per environment
-- Vertical scaling (increase VDS resources)
-- Suitable for MVP and early growth
-
-### Future Horizontal Scaling Path
-
-1. **Database**: PostgreSQL replication, MongoDB replica sets
-2. **Services**: Multiple instances behind load balancer
-3. **State**: Redis for session storage (already in place)
-4. **Events**: Redpanda partitioning for parallel processing
-5. **Orchestration**: Migration to Kubernetes (see ADR-003)
-
-## Key Design Principles
-
-1. **Environment Parity**: Same codebase runs in all environments
-2. **Infrastructure as Code**: Everything automated via Ansible
-3. **Immutable Deployments**: Docker images never modified after build
-4. **Fail Fast**: Comprehensive pre-flight checks prevent bad deployments
-5. **Developer Experience**: Single `make` command for any operation
-6. **Cost Optimization**: Incremental deployments, resource-aware profiles
+- `pino` for JSON-structured logging in all environments
+- `pino-pretty` for human-readable output in `local-dev`
+- Log level configurable via `LOG_LEVEL` environment variable
 
 ## Related Documentation
 
 - [ADR-001: Monorepo Strategy](adr/001-monorepo.md)
 - [ADR-002: Redpanda vs Kafka](adr/002-redpanda.md)
 - [ADR-003: Docker Compose for Container Management](adr/003-docker-compose.md)
+- [ADR-004: Git as Single Source of Truth](adr/004-git-as-single-source-of-truth.md)
 - [ADR-005: Ansible for Deployment Automation](adr/005-ansible.md)
 - [Makefile Reference](MAKEFILE.md)
 - [Infrastructure Guide](../infrastructure/README.md)

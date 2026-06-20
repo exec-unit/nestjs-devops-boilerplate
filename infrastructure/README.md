@@ -1,24 +1,24 @@
 # Infrastructure & Deployment Guide
 
-This directory contains Ansible automation for deploying the OpenMeal platform across environments.
+This directory contains Ansible automation for deploying the boilerplate across environments.
 
 ## Quick Start
 
 ### Prerequisites
 
-**On Control Machine (CI/CD server or local):**
+On Control Machine (CI/CD server or local):
 
 - Ansible 2.15+
 - Python 3.13+
 - SSH access to target servers
 
-**On Target Servers:**
+On Target Servers:
 
 - Ubuntu/Debian Linux
 - SSH server running
 - Sudo access for deployment user
 
-**For CI/CD:**
+For CI/CD:
 
 - GitHub Secrets configured
 
@@ -36,17 +36,17 @@ ansible-playbook -i inventories/prod playbooks/deploy.yml
 
 ### CI/CD Deployment
 
-**Important:** CI/CD only deploys application updates (Docker images). Infrastructure setup is done manually once.
+CI/CD only deploys application updates (Docker images). Infrastructure setup is done manually once.
 
-**Deployment Flow:**
+Deployment Flow:
 
-1. **One-time:** Manual infrastructure setup via `deploy.yml`
-2. **Ongoing:** CI/CD runs `release.yml` to deploy new service versions
+1. One-time: manual infrastructure setup via `deploy.yml`
+2. Ongoing: CI/CD runs `release.yml` to deploy new service versions
 
-**Automated via GitHub Actions:**
+Automated via GitHub Actions:
 
-- **Staging:** Auto-deploy on push to `main` branch
-- **Production:** Manual trigger with Git tag
+- Staging: auto-deploy on push to `main` branch
+- Production: manual trigger with Git tag
 
 See `.github/workflows/deploy-staging.yml` for pipeline details.
 
@@ -69,26 +69,24 @@ infrastructure/
 │       ├── common/
 │       ├── docker/
 │       ├── security/
-│       ├── openmeal-deploy/
+│       ├── nestjs_deploy/
 │       └── backup/
 └── keycloak/
     └── Dockerfile
 ```
 
-**Key components:**
-
 - `inventories/` - Environment-specific configurations (stage, prod, shared-dev)
-- `playbooks/` - deploy.yml (initial setup), release.yml (CI/CD updates)
+- `playbooks/` - `deploy.yml` (initial setup), `release.yml` (CI/CD updates)
 - `roles/` - Modular Ansible roles for different deployment aspects
-- `keycloak/` - Custom Keycloak Docker image
+- `keycloak/` - Custom Keycloak Docker image with pre-imported realm
 
 ## Playbooks
 
 ### deploy.yml - Full Deployment
 
-Use for **initial server setup** or **complete redeployment**.
+Use for initial server setup or complete redeployment.
 
-**What it does:**
+What it does:
 
 1. Pre-flight checks (system resources, DNS, ports)
 2. Install base packages and configure system
@@ -98,7 +96,7 @@ Use for **initial server setup** or **complete redeployment**.
 6. Setup SSL certificates (stage/prod)
 7. Configure automated backups (stage/prod)
 
-**Usage:**
+Usage:
 
 ```bash
 ansible-playbook -i inventories/stage/hosts.yml playbooks/deploy.yml
@@ -107,20 +105,20 @@ ansible-playbook -i inventories/stage/hosts.yml playbooks/deploy.yml
 ansible-playbook -i inventories/stage/hosts.yml playbooks/deploy.yml --check
 ```
 
-**Note:** Role execution is controlled via `all.yml` variables, not `--skip-tags`.
+Role execution is controlled via `all.yml` variables, not `--skip-tags`.
 
 ### release.yml - Incremental Release
 
-Use for **updating service versions** (used by CI/CD).
+Use for updating service versions (used by CI/CD).
 
-**Git as Single Source of Truth:**
+Git as Single Source of Truth:
 
 - Ansible runs on CI/CD server with cloned repository
 - Selectively syncs only necessary files to target server
 - Source code never touches production (only Docker images)
 - See [ADR-004](../docs/adr/004-git-as-single-source-of-truth.md)
 
-**What it does:**
+What it does:
 
 1. Sync compose files and configs from Git repo to target
 2. Generate `.env.infra` with updated versions and secrets
@@ -130,7 +128,7 @@ Use for **updating service versions** (used by CI/CD).
 6. Tag deployed images as `:latest` in registry
 7. Cleanup old images (keep current versions)
 
-**Usage:**
+Usage:
 
 ```bash
 # Manual release (update versions in all.yml first)
@@ -139,7 +137,7 @@ ansible-playbook -i inventories/stage playbooks/release.yml
 # CI/CD release (with release_map)
 ansible-playbook -i inventories/stage playbooks/release.yml \
   -e 'release_map={"user-service":"sha-abc123","api-gateway":"sha-def456"}' \
-  -e 'registry_id=crXXXXXXXXXX'
+  -e 'registry_id=your-github-username'
 ```
 
 ## Inventory Configuration
@@ -151,7 +149,7 @@ Defines target servers:
 ```yaml
 all:
   hosts:
-    openmeal-stage:
+    app-stage:
       ansible_host: 192.168.1.100
       ansible_user: deploy
       ansible_port: 22
@@ -169,49 +167,48 @@ ssl_email: admin@example.com
 
 # Service versions (updated by CI/CD)
 service_versions:
-  user_service: "sha-abc123"
-  api_gateway: "sha-def456"
+  user_service: 'sha-abc123'
+  api_gateway: 'sha-def456'
 ```
 
-**Note:** `deployment_type` can be `shared-dev`, `stage`, or `prod`. The `shared-dev` environment is deployed manually, not via CI/CD.
+`deployment_type` can be `shared-dev`, `stage`, or `prod`. The `shared-dev` environment is deployed manually, not via CI/CD.
 
 ### group_vars/vault.yml
 
 Encrypted secrets:
 
 ```yaml
-vault_postgres_password: "secret123"
-vault_redis_password: "secret456"
+vault_postgres_password: 'secret123'
+vault_redis_password: 'secret456'
 vault_services_env: |
   USER_SERVICE_DB_PASSWORD=xxx
   USER_SERVICE_REDIS_URL=xxx
 ```
 
-**Generation:**
+Generation:
 
-- **CI/CD:** Generated by `.github/scripts/generate-vault.py` from GitHub Secrets
-- **Local:** Manually created for local Ansible runs
-- **Note:** File is gitignored, never committed
+- CI/CD: generated by `.github/scripts/generate-vault.py` from GitHub Secrets
+- Local: manually created for local Ansible runs
+- File is gitignored, never committed
 
 ### CI/CD Pipeline
 
-GitHub Secrets → `generate-vault.py` → `vault.yml` → `.env` files
+GitHub Secrets -> `generate-vault.py` -> `vault.yml` -> `.env` files
 
-**Required GitHub Secrets:**
+Required GitHub Secrets:
 
-| Secret                    | Description                     | Format                               |
-| ------------------------- | ------------------------------- | ------------------------------------ |
-| `ANSIBLE_SSH_KEY`         | SSH private key for deployment  | PEM format                           |
-| `ANSIBLE_INVENTORY_HOSTS` | Server inventory                | YAML content of `hosts.yml`          |
-| `ANSIBLE_INVENTORY_ALL`   | Environment config              | YAML content of `all.yml`            |
-| `INFRA_ENV`               | Infrastructure secrets          | Multiline `KEY=VALUE`                |
-| `<SERVICE_NAME>_ENV`      | Per-service environment secrets | Multiline `KEY=VALUE`                |
-| `SERVICES_ENV` (optional) | Consolidated service secrets    | Multiline `<SERVICE_NAME>_KEY=VALUE` |
-| `YC_REGISTRY_ID`          | Yandex Container Registry ID    | String                               |
-| `YC_REGISTRY_USERNAME`    | Registry username               | String                               |
-| `YC_REGISTRY_PASSWORD`    | Registry password               | String                               |
+| Secret                    | Description                     | Format                                 |
+| ------------------------- | ------------------------------- | -------------------------------------- |
+| `ANSIBLE_SSH_KEY`         | SSH private key for deployment  | PEM format                             |
+| `ANSIBLE_INVENTORY_HOSTS` | Server inventory                | YAML content of `hosts.yml`            |
+| `ANSIBLE_INVENTORY_ALL`   | Environment config              | YAML content of `all.yml`              |
+| `INFRA_ENV`               | Infrastructure secrets          | Multiline `KEY=VALUE`                  |
+| `<SERVICE_NAME>_ENV`      | Per-service environment secrets | Multiline `KEY=VALUE`                  |
+| `SERVICES_ENV` (optional) | Consolidated service secrets    | Multiline `<SERVICE_NAME>_KEY=VALUE`   |
+| `GHCR_USERNAME`           | GitHub Container Registry login | GitHub username or org                 |
+| `GHCR_PAT`                | GitHub Container Registry token | Personal Access Token (write:packages) |
 
-**Example INFRA_ENV:**
+Example `INFRA_ENV`:
 
 ```
 POSTGRES_PASSWORD=secret123
@@ -220,11 +217,11 @@ REDIS_PASSWORD=secret789
 REDPANDA_SUPERUSER_PASSWORD=secretabc
 ```
 
-**Per-Service Secrets (recommended):**
+Per-Service Secrets (recommended):
 
-Use `<SERVICE_NAME>_ENV` secrets for each service:
+Use `<SERVICE_NAME>_ENV` secrets for each service.
 
-**Example USER_SERVICE_ENV:**
+Example `USER_SERVICE_ENV`:
 
 ```
 DB_PASSWORD=user_svc_secret
@@ -232,25 +229,22 @@ REDIS_URL=redis://redis:6379/0
 JWT_SECRET=user_jwt_key
 ```
 
-**Example ORDER_SERVICE_ENV:**
+Example `API_GATEWAY_ENV`:
 
 ```
-DB_PASSWORD=order_svc_secret
+DB_PASSWORD=gateway_svc_secret
 KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
-PAYMENT_API_KEY=payment_secret
 ```
 
-**Consolidated Secrets (optional):**
+Consolidated Secrets (optional):
 
-Alternatively, use `SERVICES_ENV` for shared configuration across multiple services:
-
-**Example SERVICES_ENV:**
+Alternatively, use `SERVICES_ENV` for configuration shared across multiple services:
 
 ```
 USER_SERVICE_DB_PASSWORD=xxx
 USER_SERVICE_REDIS_URL=redis://...
-ORDER_SERVICE_DB_PASSWORD=yyy
-ORDER_SERVICE_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+API_GATEWAY_DB_PASSWORD=yyy
+API_GATEWAY_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
 ```
 
 Per-service secrets take priority over consolidated secrets when both are defined.
@@ -259,15 +253,15 @@ Per-service secrets take priority over consolidated secrets when both are define
 
 ```
 GitHub Secrets
-    ↓
+    |
 generate-vault.py (Python script)
-    ↓
+    |
 vault.yml (Ansible variables)
-    ↓
+    |
 generate-configs.yml (Ansible task)
-    ↓
+    |
 .env.infra + .env.{service} (on server)
-    ↓
+    |
 Docker Compose (container environment)
 ```
 
@@ -293,7 +287,7 @@ Docker Compose (container environment)
 - Setup unattended-upgrades
 - Disable root SSH login
 
-### openmeal-deploy
+### nestjs_deploy
 
 - Sync project files to server (rsync)
 - Generate `.env.infra` from vault
@@ -310,11 +304,11 @@ Docker Compose (container environment)
 
 ## SSL Certificate Management
 
-SSL certificates are **automatically managed by Ansible** during deployment.
+SSL certificates are managed by Ansible during deployment.
 
 ### Automatic Setup & Renewal
 
-The `openmeal-deploy` role handles:
+The `nestjs_deploy` role handles:
 
 - Initial certificate issuance via Let's Encrypt
 - Automatic renewal (systemd timer or cron)
@@ -325,7 +319,7 @@ Certificates renew automatically when <30 days remaining.
 
 ### Manual Operations (Optional)
 
-If needed, SSL can be managed directly on target server:
+If needed, SSL can be managed directly on the target server:
 
 ```bash
 # Initial certificate
@@ -347,10 +341,12 @@ docker compose exec nginx nginx -s reload
 
 Configured by `backup` role (stage/prod only):
 
-- **PostgreSQL:** Daily at 2 AM
-- **MongoDB:** Daily at 3 AM
-- **Retention:** 7 days
-- **Location:** `/var/backups/openmeal/`
+- PostgreSQL: daily at 2 AM
+- MongoDB: daily at 3 AM
+- Retention: 7 days
+- Location: `/var/backups/app/`
+
+For production backups with deduplication and remote storage, configure Restic separately - the `backup` role provides the hooks.
 
 ### Manual Backup
 
@@ -374,20 +370,20 @@ docker compose exec -T mongodb mongorestore --archive < backup.archive
 
 ### Deployment Fails at "Pull images"
 
-**Cause:** Docker not logged into registry
+Cause: Docker not logged into GitHub Container Registry.
 
-**Fix:**
+Fix:
 
 ```bash
-# On target server (avoid password in shell history)
-echo "$YC_REGISTRY_PASSWORD" | docker login cr.yandex --username oauth --password-stdin
+# On target server
+echo "$GHCR_PAT" | docker login ghcr.io --username $GHCR_USERNAME --password-stdin
 
-# Or ensure vault_yc_registry_username/password are set in Ansible
+# Or ensure vault_ghcr_username/vault_ghcr_pat are set in vault.yml
 ```
 
 ### Services Won't Start
 
-**Check logs:**
+Check logs:
 
 ```bash
 # On target server
@@ -395,40 +391,40 @@ make logs SERVICE=user-service
 make check-services
 ```
 
-**Common issues:**
+Common issues:
 
-- Port conflicts: Check `.env.infra` port assignments
-- Missing secrets: Verify `vault.yml` was generated correctly
-- Database not ready: Check healthchecks in `compose/infra.yml`
+- Port conflicts: check `.env.infra` port assignments
+- Missing secrets: verify `vault.yml` was generated correctly
+- Database not ready: check healthchecks in `compose/infra.yml`
 
 ### SSL Certificate Issues
 
-**Check certificate status:**
+Check certificate status:
 
 ```bash
 make exec-certbot
 # Inside: certbot certificates
 ```
 
-**Common issues:**
+Common issues:
 
-- DNS not pointing to server: Verify A records
-- Port 80 blocked: Check firewall (`sudo ufw status`)
+- DNS not pointing to server: verify A records
+- Port 80 blocked: check firewall (`sudo ufw status`)
 - Rate limit: Let's Encrypt has limits (5 certs/week per domain)
 
 ### Ansible Connection Issues
 
-**Test connectivity:**
+Test connectivity:
 
 ```bash
 ansible -i inventories/stage all -m ping
 ```
 
-**Common issues:**
+Common issues:
 
 - SSH key not added: `ssh-add ~/.ssh/deploy_key`
-- Wrong user: Check `ansible_user` in `hosts.yml`
-- Firewall blocking SSH: Ensure port 22 is open
+- Wrong user: check `ansible_user` in `hosts.yml`
+- Firewall blocking SSH: ensure port 22 is open
 
 ## Testing
 
@@ -441,7 +437,7 @@ Test Ansible roles in isolated environments:
 make test-ansible
 
 # Test specific role
-make test-ansible-role ROLE=openmeal-deploy
+make test-ansible-role ROLE=nestjs_deploy
 
 # Lint playbooks
 make test-ansible-lint
@@ -467,14 +463,14 @@ make test-ansible-syntax
 
 See `.github/workflows/` for complete pipeline:
 
-1. **prepare-release** - Detect changed services, generate version
-2. **build-images** - Build and push Docker images to registry
-3. **deploy-ansible** - Run `release.yml` playbook with new versions
+1. prepare-release - detect changed services, generate version
+2. build-images - build and push Docker images to `ghcr.io`
+3. deploy-ansible - run `release.yml` playbook with new versions
 
-**Flow:**
+Flow:
 
 ```
-Git Push → Detect Changes → Build Images → Generate vault.yml → Ansible Deploy
+Git Push -> Detect Changes -> Build Images -> Generate vault.yml -> Ansible Deploy
 ```
 
-For detailed CI/CD documentation, see [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#build--deployment-pipeline).
+For detailed CI/CD documentation, see [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#build-and-deployment-pipeline).

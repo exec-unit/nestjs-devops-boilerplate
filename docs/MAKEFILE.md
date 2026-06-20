@@ -5,10 +5,7 @@ Complete guide to all `make` commands available in the project.
 ## Quick Reference
 
 ```bash
-# Run a command
 make <command>
-
-# Show available commands (if implemented)
 make help
 ```
 
@@ -27,77 +24,51 @@ make help
 | `make restart-db`               | Restart database containers to apply new user configurations     |
 | `make ps`                       | List running containers with status                              |
 
-**Examples:**
-
-```bash
-make up
-make down
-
-make up SERVICES=user-service
-make restart SERVICES="order-service payment-service"
-make down SERVICES=api-gateway
-
-make restart-db
-```
-
 ### Initialization
 
-| Command           | Description                                                                             |
-| ----------------- | --------------------------------------------------------------------------------------- |
-| `make init`       | Initialize all config files from examples (`.env.infra`, `init-users.conf`, etc.)       |
-| `make init-local` | Initialize local development environment (generates `compose/docker-compose.local.yml`) |
-| `make check-env`  | Verify `.env.infra` exists                                                              |
-
-**First-time setup:**
-
-```bash
-make init
-# Edit .env.infra with your settings
-make up
-```
+| Command              | Description                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| `make init`          | Copy all `.example` files to their real counterparts (`.env.infra`, `init-users.conf`, etc.) |
+| `make init-env`      | Initialize `.env.infra` only                                                                 |
+| `make init-db-users` | Initialize database user config files only                                                   |
+| `make check-env`     | Verify `.env.infra` exists before running compose commands                                   |
 
 ## Service Interaction
 
 ### Exec into Containers
 
-| Command              | Description                      |
-| -------------------- | -------------------------------- |
-| `make exec-postgres` | Open PostgreSQL shell (`psql`)   |
-| `make exec-mongo`    | Open MongoDB shell (`mongosh`)   |
-| `make exec-redis`    | Open Redis CLI                   |
-| `make exec-redpanda` | Open Redpanda shell (`rpk`)      |
-| `make exec-keycloak` | Bash shell in Keycloak container |
-| `make exec-minio`    | MinIO client (`mc`)              |
-| `make exec-nginx`    | Bash shell in Nginx container    |
-
-**Example:**
-
-```bash
-# Connect to Postgres and list databases
-make exec-postgres
-# Inside: \l
-```
+| Command                | Description                          |
+| ---------------------- | ------------------------------------ |
+| `make exec-postgres`   | `psql` shell as the configured user  |
+| `make exec-mongo`      | `mongosh` shell as root              |
+| `make exec-redis`      | `redis-cli` shell                    |
+| `make exec-redpanda`   | `rpk cluster info` in the container  |
+| `make exec-keycloak`   | Bash shell in the Keycloak container |
+| `make exec-minio`      | Shell in the MinIO container (`mc`)  |
+| `make exec-nginx`      | Shell in the Nginx container         |
+| `make exec-certbot`    | Shell in the Certbot container       |
+| `make exec-prometheus` | Shell in the Prometheus container    |
+| `make exec-grafana`    | Shell in the Grafana container       |
 
 ### Logs
 
-| Command                          | Description                               |
-| -------------------------------- | ----------------------------------------- |
-| `make logs`                      | View logs from all services (follow mode) |
-| `make logs SERVICE=user-service` | View logs from specific service           |
+| Command                          | Description                         |
+| -------------------------------- | ----------------------------------- |
+| `make logs`                      | Follow logs from all services       |
+| `make logs SERVICE=user-service` | Follow logs from a specific service |
 
 ## Database Management
 
 ### Backups
 
-| Command                | Description                                              |
-| ---------------------- | -------------------------------------------------------- |
-| `make backup-postgres` | Create PostgreSQL backup (stored in `backups/postgres/`) |
-| `make backup-mongo`    | Create MongoDB backup (stored in `backups/mongodb/`)     |
+`make backup-postgres` and `make backup-mongo` use `pg_dump` and `mongodump` inside the running containers and copy the output to `./backups/`.
 
-**Backup files:**
+| Command                | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `make backup-postgres` | `pg_dump` to `backups/postgres_YYYYMMDD_HHMMSS.sql`   |
+| `make backup-mongo`    | `mongodump` to `backups/mongo_YYYYMMDD_HHMMSS.tar.gz` |
 
-- Postgres: `backups/postgres/backup_YYYYMMDD_HHMMSS.sql`
-- MongoDB: `backups/mongodb/backup_YYYYMMDD_HHMMSS/`
+These are ad-hoc dumps for development use. For production backup automation with deduplication, encryption, and remote storage, configure [Restic](https://restic.net/) separately - the Ansible `backup` role provides the hooks.
 
 ## SSL Certificate Management
 
@@ -107,52 +78,32 @@ make exec-postgres
 | `make ssl-cert-renew` | Manually renew SSL certificates                    |
 | `make ssl-setup-cron` | Setup automatic renewal via systemd/cron           |
 
-**Requirements:**
-
-- `ENVIRONMENT=stage` or `prod` in `.env.infra`
-- Valid `SSL_EMAIL`, `API_DOMAIN_NAME`, `KEYCLOAK_DOMAIN_NAME` configured
-- DNS records pointing to server
-- Ports 80/443 accessible
-
-**Usage:**
-
-```bash
-# First time setup (after DNS configured)
-make ssl-cert-init
-
-# Setup automatic renewal
-make ssl-setup-cron
-```
+Requires `ENVIRONMENT=stage` or `prod`, valid `SSL_EMAIL`, `API_DOMAIN_NAME`, `KEYCLOAK_DOMAIN_NAME` in `.env.infra`, and DNS records pointing to the server.
 
 ## Cleanup
 
-| Command              | Description                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------- |
-| `make clean`         | Remove containers and networks (keeps volumes)                                         |
-| `make clean-volumes` | ⚠️ Remove ALL volumes (deletes all data)                                               |
-| `make clean-local`   | Remove local development files (`compose/docker-compose.local.yml`, `.env.*` services) |
-| `make prune`         | Docker system prune (remove unused images/containers)                                  |
+| Command              | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `make clean`         | Remove containers and networks (volumes are kept) |
+| `make clean-volumes` | Remove ALL volumes - deletes all database data    |
+| `make prune`         | `docker system prune` to reclaim disk space       |
 
-**⚠️ Warning:** `make clean-volumes` is destructive and will delete all database data!
+`make clean-volumes` prompts for confirmation before proceeding.
 
-## Testing
+## Testing & Linting
 
-| Command                                       | Description                                     |
-| --------------------------------------------- | ----------------------------------------------- |
-| `make test`                                   | Run all Ansible tests (Molecule + ansible-lint) |
-| `make test-ansible`                           | Run Molecule tests for all roles                |
-| `make test-ansible-role ROLE=openmeal-deploy` | Test specific Ansible role                      |
-| `make test-ansible-lint`                      | Run ansible-lint on playbooks/roles             |
-| `make test-ansible-syntax`                    | Check Ansible syntax                            |
+| Command                                     | Description                                     |
+| ------------------------------------------- | ----------------------------------------------- |
+| `make test`                                 | Run all Ansible tests (Molecule + ansible-lint) |
+| `make test-ansible`                         | Run Molecule tests for all roles                |
+| `make test-ansible-role ROLE=nestjs_deploy` | Test a specific Ansible role                    |
+| `make test-ansible-lint`                    | Run ansible-lint on playbooks and roles         |
 
-**Java tests:**
+Node.js tests run via pnpm, not make:
 
 ```bash
-# Run tests for specific service
-./mvnw -pl services/user-service test
-
-# Run all tests
-./mvnw test
+pnpm test
+pnpm test:e2e
 ```
 
 ## Utilities
@@ -160,171 +111,54 @@ make ssl-setup-cron
 | Command               | Description                                                        |
 | --------------------- | ------------------------------------------------------------------ |
 | `make check-services` | Run `scripts/check-services.sh` to verify health of all containers |
-| `make check-yq`       | Verify `yq` is installed (required for local dev)                  |
 
 ## Environment-Specific Behavior
 
-The `ENVIRONMENT` variable in `.env.infra` controls which services start:
+The `ENVIRONMENT` variable in `.env.infra` determines which Docker Compose profiles are activated. See [Architecture Overview](ARCHITECTURE.md#deployment-model) for the exact profile-to-environment mapping.
 
 ### local-dev
 
-```bash
-ENVIRONMENT=local-dev make up
-```
+Starts: Postgres, MongoDB, Redis, MinIO
 
-**Starts:** Postgres, MongoDB, Redis, MinIO, microservices
+Does not start: Keycloak, Redpanda, Nginx, Certbot, Prometheus, Grafana
 
-**Skips:** Keycloak, Redpanda, Nginx, Certbot, Monitoring
-
-**Use case:** Developer laptop with limited resources
+Keycloak and Redpanda are expected to be available on the shared-dev VDS; configure their connection details in the service `.env` files.
 
 ### shared-dev
 
-```bash
-ENVIRONMENT=shared-dev make up
-```
+Starts: Keycloak, Redpanda, Nginx, Certbot
 
-**Starts:** Keycloak, Redpanda, Nginx
-
-**Use case:** Shared VDS for team development
+Postgres is also started on shared-dev (Keycloak depends on it). MongoDB is not started on shared-dev - developers run it locally.
 
 ### stage
 
-```bash
-ENVIRONMENT=stage make up
-```
-
-**Starts:** Full stack (no MinIO, uses cloud S3)
-
-**Use case:** Pre-production testing
+Starts: Full stack except MinIO (cloud S3 used instead)
 
 ### prod
 
-```bash
-ENVIRONMENT=prod make up
-```
-
-**Starts:** Full stack + Prometheus/Grafana monitoring
-
-**Use case:** Production deployment
-
-## Advanced Usage
-
-### Custom Docker Compose Commands
-
-The Makefile constructs Docker Compose commands based on environment. You can run custom commands:
-
-```bash
-# View constructed command
-make ps
-
-# Run custom compose command
-docker compose -f docker-compose.yml -f compose/infra.yml --profile local-dev <command>
-```
-
-### Selective Service Management
-
-```bash
-# Start only specific services
-docker compose up -d user-service postgres redis
-
-# Restart single service
-docker compose restart user-service
-
-# View logs from multiple services
-docker compose logs -f user-service api-gateway
-```
-
-### Local Development with Code Changes
-
-```bash
-# 1. Generate local compose file (builds from source)
-make init-local
-
-# 2. Edit microservices.local to select which services to run
-nano microservices.local
-# Uncomment: user-service
-
-# 3. Build and start
-make docker-build
-make up
-```
+Starts: Full stack (no MinIO) + Prometheus + Grafana
 
 ## Troubleshooting
 
 ### Services won't start
 
 ```bash
-# Check what's running
 make ps
-
-# Check health status
 make check-services
-
-# View logs
 make logs SERVICE=user-service
-
-# Clean restart
-make down
-make clean
-make up
-```
-
-### Port conflicts
-
-```bash
-# Check what's using ports
-sudo lsof -i :8080
-sudo lsof -i :5432
-
-# Stop conflicting services or change ports in .env.infra
 ```
 
 ### Database connection issues
 
 ```bash
-# Verify database is running
 make exec-postgres
-
-# Check database users
-make exec-postgres
-# Inside: \du
-
-# Recreate database configs
-make prepare-db-configs
-make restart
 ```
+
+Inside psql: `\l` lists databases, `\du` lists users.
 
 ### SSL certificate issues
 
 ```bash
-# Check certificate status
 make exec-certbot
-# Inside: certbot certificates
-
-# Force renewal
 make ssl-cert-renew
-
-# Check Nginx config
-make exec-nginx
-# Inside: nginx -t
 ```
-
-## Makefile Structure
-
-The main `Makefile` includes several modular files:
-
-- `makefiles/common.mk` - Common variables, colors, OS detection
-- `makefiles/docker.mk` - Docker Compose orchestration
-- `makefiles/services.mk` - Service exec commands and backups
-- `makefiles/ssl.mk` - SSL certificate management
-- `makefiles/ansible.mk` - Ansible testing
-- `makefiles/local-dev.mk` - Local development utilities
-
-This modular approach keeps the Makefile maintainable and organized.
-
-## Related Documentation
-
-- [Architecture Overview](ARCHITECTURE.md) - System design and deployment model
-- [Infrastructure Guide](../infrastructure/README.md) - Ansible deployment
-- [Root README](../README.md) - Quick start guide
